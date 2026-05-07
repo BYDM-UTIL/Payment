@@ -50,7 +50,14 @@ export async function getUserProfile(uid: string): Promise<AppUser | null> {
 }
 
 export async function createUserProfile(uid: string, data: Omit<AppUser, 'uid'>) {
-  await setDoc(doc(db, 'users', uid), data)
+  console.log('[Auth Service] Creating user profile:', { uid, role: data.role, email: data.email })
+  try {
+    await setDoc(doc(db, 'users', uid), data)
+    console.log('[Auth Service] User profile created successfully')
+  } catch (error) {
+    console.error('[Auth Service] Error creating user profile:', error)
+    throw error
+  }
 }
 
 export async function updateUserProfile(uid: string, data: Partial<Omit<AppUser, 'uid'>>) {

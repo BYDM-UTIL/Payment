@@ -42,8 +42,13 @@ export async function getEmployee(employeeId: string): Promise<Employee | null> 
 export async function createEmployee(
   data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
+  // Remove undefined fields to prevent Firestore validation errors
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  )
+  
   const ref = await addDoc(collection(db, 'employees'), {
-    ...data,
+    ...cleanData,
     createdAt: isoNow(),
     updatedAt: isoNow(),
   })

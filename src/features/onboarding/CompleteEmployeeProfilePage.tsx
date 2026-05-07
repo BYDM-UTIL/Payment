@@ -77,7 +77,7 @@ export function CompleteEmployeeProfilePage() {
 
       // Create employee record
       const fullName = `${data.firstName} ${data.lastName}`
-      const employeeId = await createEmployee({
+      const employeeData = {
         employerId: user.uid,
         userId: user.uid,
         firstName: data.firstName,
@@ -87,11 +87,17 @@ export function CompleteEmployeeProfilePage() {
         phone: data.phone,
         address: data.address,
         startDate: data.startDate,
-        bankDetails: data.bankDetails || undefined,
         ...DEFAULT_SALARY_VALUES,
         active: true,
         notes: '',
-      })
+      } as any
+
+      // Only add bankDetails if it's not empty
+      if (data.bankDetails?.trim()) {
+        employeeData.bankDetails = data.bankDetails
+      }
+
+      const employeeId = await createEmployee(employeeData)
 
       // Update user profile with employeeId and set employeeProfileCompleted to true
       await updateUserProfile(user.uid, {

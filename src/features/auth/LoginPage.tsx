@@ -49,19 +49,30 @@ export function LoginPage() {
   }
 
   async function handleLoginSubmit() {
-    const result = await loginWithEmail(email, password)
-    const uid = result.user.uid
-    const existingProfile = await getUserProfile(uid)
+    try {
+      console.log('Starting login for:', email)
+      const result = await loginWithEmail(email, password)
+      console.log('Firebase login successful:', result.user.uid)
+      
+      const uid = result.user.uid
+      const existingProfile = await getUserProfile(uid)
+      console.log('Existing profile:', existingProfile)
 
-    if (!existingProfile) {
-      await createUserProfile(uid, {
-        email: result.user.email || email,
-        displayName: result.user.displayName || 'משתמש',
-        role: 'employer',
-        employeeProfileCompleted: true,
-        defaultLanguage: 'he',
-        createdAt: new Date().toISOString(),
-      })
+      if (!existingProfile) {
+        console.log('Creating new employer profile for existing Firebase user')
+        await createUserProfile(uid, {
+          email: result.user.email || email,
+          displayName: result.user.displayName || 'משתמש',
+          role: 'employer',
+          employeeProfileCompleted: true,
+          defaultLanguage: 'he',
+          createdAt: new Date().toISOString(),
+        })
+        console.log('Employer profile created')
+      }
+    } catch (error) {
+      console.error('Login error:', error)
+      throw error
     }
   }
 
@@ -72,38 +83,54 @@ export function LoginPage() {
       return
     }
 
-    const result = await registerWithEmail(email, password)
-    const uid = result.user.uid
+    try {
+      console.log('Starting registration for:', email)
+      const result = await registerWithEmail(email, password)
+      console.log('Firebase user created:', result.user.uid)
+      
+      const uid = result.user.uid
 
-    // If registering as employer (with valid admin password), create employer user
-    // Otherwise, create employee user who must complete profile
-    const role = registerAsEmployer ? 'employer' : 'employee'
-    const profileCompleted = registerAsEmployer
+      // If registering as employer (with valid admin password), create employer user
+      // Otherwise, create employee user who must complete profile
+      const role = registerAsEmployer ? 'employer' : 'employee'
+      const profileCompleted = registerAsEmployer
 
-    await createUserProfile(uid, {
-      email: result.user.email || email,
-      displayName: displayName.trim(),
-      role,
-      employeeProfileCompleted: profileCompleted,
-      defaultLanguage: 'he',
-      createdAt: new Date().toISOString(),
-    })
+      console.log('Creating user profile:', { uid, role, profileCompleted })
+      
+      await createUserProfile(uid, {
+        email: result.user.email || email,
+        displayName: displayName.trim(),
+        role,
+        employeeProfileCompleted: profileCompleted,
+        defaultLanguage: 'he',
+        createdAt: new Date().toISOString(),
+      })
+      
+      console.log('User profile created successfully')
+    } catch (error) {
+      console.error('Registration error:', error)
+      throw error
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     resetAuthError()
     setLoading(true)
+    console.log('Form submitted. Mode:', mode)
 
     try {
       if (mode === 'login') {
+        console.log('Attempting login...')
         await handleLoginSubmit()
       } else {
+        console.log('Attempting registration...')
         await handleRegisterSubmit()
       }
+      console.log('Auth successful, navigating to home...')
       navigate('/')
     } catch (error) {
-      console.error('Auth error:', error)
+      console.error('Auth error caught in handleSubmit:', error)
       
       // Better error messages
       if (error instanceof Error) {
@@ -117,6 +144,8 @@ export function LoginPage() {
           setError('חשבון זה הוסר או נחסם.')
         } else if (error.message.includes('too-many-requests')) {
           setError('יותר מדי ניסיונות כושלים. נסה שוב בעוד כמה דקות.')
+        } else if (error.message.includes('Permission denied')) {
+          setError('שגיאת הרשאה: בדוק את חוקי Firestore. פרטים נוספים בקונסול.')
         } else {
           setError(error.message || getAuthErrorMessage())
         }
