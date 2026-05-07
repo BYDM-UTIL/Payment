@@ -34,27 +34,27 @@ export function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top bar */}
-      <header className="bg-primary-800 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg safe-top">
+      <header className="bg-white/80 backdrop-blur border-b border-white text-gray-900 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm safe-top">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMenuOpen(true)}
-            className="p-2 rounded-xl hover:bg-primary-700 transition-colors sm:hidden"
+            className="p-2 rounded-xl hover:bg-gray-100 transition-colors sm:hidden"
           >
             <Menu size={22} />
           </button>
-          <span className="font-bold text-base sm:text-lg">{t('app.shortName')}</span>
+          <span className="font-extrabold text-base sm:text-lg tracking-tight">{t('app.shortName')}</span>
         </div>
         <div className="flex items-center gap-3">
           <LanguageSwitcher />
           {user && (
-            <span className="hidden sm:block text-sm opacity-80">{user.displayName}</span>
+            <span className="hidden sm:block text-sm text-gray-500">{user.displayName}</span>
           )}
         </div>
       </header>
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
-        <aside className="hidden sm:flex flex-col w-56 bg-white border-e border-gray-200 shadow-sm py-4 shrink-0">
+        <aside className="hidden sm:flex flex-col w-56 bg-white/80 backdrop-blur border-e border-white shadow-sm py-4 shrink-0">
           <nav className="flex flex-col gap-1 px-2">
             {navItems.map(({ to, labelKey, Icon }) => (
               <NavLink
@@ -65,7 +65,7 @@ export function Layout() {
                   clsx(
                     'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
+                      ? 'bg-primary-100 text-primary-800'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   )
                 }
@@ -99,7 +99,7 @@ export function Layout() {
                       clsx(
                         'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors',
                         isActive
-                          ? 'bg-primary-50 text-primary-700'
+                          ? 'bg-primary-100 text-primary-800'
                           : 'text-gray-600 hover:bg-gray-100'
                       )
                     }
@@ -122,7 +122,7 @@ export function Layout() {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="sm:hidden fixed bottom-0 start-0 end-0 bg-white border-t border-gray-200 flex safe-bottom z-40">
+      <nav className="sm:hidden fixed bottom-0 start-0 end-0 bg-white/95 backdrop-blur border-t border-white flex safe-bottom z-40">
         {navItems.slice(0, 5).map(({ to, labelKey, Icon }) => (
           <NavLink
             key={to}
@@ -131,7 +131,7 @@ export function Layout() {
             className={({ isActive }) =>
               clsx(
                 'flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors',
-                isActive ? 'text-primary-700' : 'text-gray-500'
+                isActive ? 'text-primary-800' : 'text-gray-500'
               )
             }
           >

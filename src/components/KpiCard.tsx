@@ -10,7 +10,7 @@ interface Props {
 }
 
 const colorMap = {
-  blue:   'bg-primary-50 text-primary-700 border-primary-200',
+  blue:   'bg-primary-50 text-primary-800 border-primary-200',
   green:  'bg-success-50 text-success-700 border-success-200',
   red:    'bg-danger-50 text-danger-700 border-danger-200',
   orange: 'bg-warning-50 text-warning-700 border-warning-200',

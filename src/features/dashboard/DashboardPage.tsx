@@ -102,8 +102,8 @@ export function DashboardPage() {
             <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
             <Tooltip formatter={(v: number) => formatCurrency(v)} />
             <Legend />
-            <Bar dataKey="gross" name={t('payments.grossTotal')} fill="#3b82f6" radius={[4,4,0,0]} />
-            <Bar dataKey="paid" name={t('payments.totalPaid')} fill="#22c55e" radius={[4,4,0,0]} />
+            <Bar dataKey="gross" name={t('payments.grossTotal')} fill="#c2410c" radius={[4,4,0,0]} />
+            <Bar dataKey="paid" name={t('payments.totalPaid')} fill="#2563eb" radius={[4,4,0,0]} />
             <Bar dataKey="balance" name={t('payments.balance')} fill="#ef4444" radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
