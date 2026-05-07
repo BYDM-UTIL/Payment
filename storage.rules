@@ -10,22 +10,44 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function isEmployer() {
+      return isAuth()
+        && (
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'employer'
+          || isAdmin()
+        );
+    }
+
+    function isEmployeeOwner(employeeId) {
+      return isAuth()
+        && (
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'employee'
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'viewer'
+        )
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.employeeId == employeeId;
+    }
+
     function canAccessEmployee(employeeId) {
       return isAuth()
         && (
           firestore.get(/databases/(default)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+          || isEmployeeOwner(employeeId)
           || isAdmin()
         );
     }
 
     // Signatures: signatures/{employeeId}/{year}/{month}/signature.png
     match /signatures/{employeeId}/{year}/{month}/{fileName} {
-      allow read, write: if canAccessEmployee(employeeId);
+      allow read: if canAccessEmployee(employeeId);
+      allow write: if firestore.get(/databases/(default)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+        || isEmployeeOwner(employeeId);
     }
 
     // Attachments: attachments/{employeeId}/{year}/{month}/{fileName}
     match /attachments/{employeeId}/{year}/{month}/{fileName} {
-      allow read, write: if canAccessEmployee(employeeId);
+      allow read: if canAccessEmployee(employeeId);
+      allow write: if firestore.get(/databases/(default)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+        || isEmployer();
     }
 
     // Deny all other paths by default

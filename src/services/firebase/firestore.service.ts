@@ -150,9 +150,21 @@ export async function saveSignature(
   signedBy: string
 ): Promise<void> {
   const ref = doc(db, 'employees', employeeId, 'years', String(year), 'monthlyPayments', String(month))
+  const snap = await getDoc(ref)
+
+  if (!snap.exists()) {
+    throw new Error('payment-not-found')
+  }
+
+  const existing = snap.data()
+  if (existing.signed === true || existing.employeeSignatureUrl) {
+    throw new Error('payment-already-signed')
+  }
+
   await setDoc(
     ref,
     {
+      signed: true,
       employeeSignatureUrl: signatureUrl,
       signedAt: isoNow(),
       signedBy,

@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "payments": "Payments",
+    "myPayments": "My Payments",
     "pension": "Pension",
     "employees": "Employees",
     "reports": "Reports",
@@ -35,6 +36,7 @@
   },
   "payments": {
     "title": "Payment Tracking",
+    "myPaymentsTitle": "My Payments",
     "month": "Month",
     "baseSalary": "Base Salary",
     "pocketMoney": "Pocket Money",
@@ -63,7 +65,13 @@
     "uploadFile": "Upload File",
     "yearlyOverview": "Yearly Overview",
     "allMonths": "All Months",
-    "noData": "No data for this year"
+    "noData": "No data for this year",
+    "noPaymentsToShow": "No payments were found to display",
+    "signatureStatus": "Signature Status",
+    "signedStatus": "Signed",
+    "notSignedStatus": "Not signed yet",
+    "signatureSaved": "The signature was saved successfully",
+    "alreadySigned": "This payment is already signed"
   },
   "status": {
     "paid": "Paid",
@@ -231,7 +239,8 @@
     "download": "Download",
     "upload": "Upload",
     "view": "View",
-    "print": "Print"
+    "print": "Print",
+    "logOff": "Log Off"
   },
   "validation": {
     "required": "This field is required",

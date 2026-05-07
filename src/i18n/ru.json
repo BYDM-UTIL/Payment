@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Панель управления",
     "payments": "Платежи",
+    "myPayments": "Мои платежи",
     "pension": "Пенсия",
     "employees": "Сотрудники",
     "reports": "Отчёты",
@@ -35,6 +36,7 @@
   },
   "payments": {
     "title": "Учёт платежей",
+    "myPaymentsTitle": "Мои платежи",
     "month": "Месяц",
     "baseSalary": "Базовая зарплата",
     "pocketMoney": "Карманные деньги",
@@ -63,7 +65,13 @@
     "uploadFile": "Загрузить файл",
     "yearlyOverview": "Годовой обзор",
     "allMonths": "Все месяцы",
-    "noData": "Нет данных за этот год"
+    "noData": "Нет данных за этот год",
+    "noPaymentsToShow": "Платежи для отображения не найдены",
+    "signatureStatus": "Статус подписи",
+    "signedStatus": "Подписано",
+    "notSignedStatus": "Ещё не подписано",
+    "signatureSaved": "Подпись успешно сохранена",
+    "alreadySigned": "Этот платёж уже подписан"
   },
   "status": {
     "paid": "Оплачено",
@@ -231,7 +239,8 @@
     "download": "Скачать",
     "upload": "Загрузить",
     "view": "Просмотр",
-    "print": "Печать"
+    "print": "Печать",
+    "logOff": "Выход"
   },
   "validation": {
     "required": "Это поле обязательно",

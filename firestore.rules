@@ -10,69 +10,92 @@ service cloud.firestore {
     // Helper: get user role from /users/{uid}
     function userRole() {
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      // Return role if user document exists, otherwise allow (first user)
       return userDoc.exists ? userDoc.data.role : 'admin';
-    }
-
-    function isAdmin() {
-      return isAuth() && userRole() == 'admin';
     }
 
     function isEmployer() {
       return isAuth() && (userRole() == 'employer' || userRole() == 'admin');
     }
 
-    function canAccessEmployee(employeeId) {
+    function isEmployee() {
+      return isAuth() && (userRole() == 'employee' || userRole() == 'viewer');
+    }
+
+    function userEmployeeId() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.exists ? userDoc.data.employeeId : null;
+    }
+
+    function isEmployeeOwner(employeeId) {
+      return isEmployee() && userEmployeeId() == employeeId;
+    }
+
+    function canReadEmployee(employeeId) {
       return isAuth() && (
-        isAdmin() ||
+        isEmployeeOwner(employeeId) ||
         get(/databases/$(database)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
       );
     }
 
+    function canSignPayment(employeeId) {
+      return isEmployeeOwner(employeeId)
+        && resource.data.signed != true
+        && request.resource.data.signed == true
+        && request.resource.data.signedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'signed',
+          'employeeSignatureUrl',
+          'signedAt',
+          'signedBy',
+          'updatedAt'
+        ]);
+    }
+
     // Users collection
     match /users/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow write: if isAuth() && request.auth.uid == userId;
     }
 
     // Employers collection
     match /employers/{employerId} {
-      allow read: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow read: if isAuth() && resource.data.createdBy == request.auth.uid;
       allow create: if isEmployer();
-      allow update, delete: if isAdmin() || resource.data.createdBy == request.auth.uid;
+      allow update, delete: if resource.data.createdBy == request.auth.uid;
     }
 
     // Employees collection
     match /employees/{employeeId} {
-      allow read: if isAuth() && (resource.data.employerId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && (request.resource.data.employerId == request.auth.uid || isAdmin());
+      allow read: if canReadEmployee(employeeId);
+      allow create: if isAuth() && request.resource.data.employerId == request.auth.uid;
       allow update: if isAuth()
-                    && (resource.data.employerId == request.auth.uid || isAdmin())
-                    && (request.resource.data.employerId == resource.data.employerId || isAdmin());
-      allow delete: if isAdmin();
+                    && resource.data.employerId == request.auth.uid
+                    && request.resource.data.employerId == resource.data.employerId;
+      allow delete: if resource.data.employerId == request.auth.uid;
 
       // Year settings
       match /years/{year} {
-        allow read: if canAccessEmployee(employeeId);
-        allow write: if canAccessEmployee(employeeId) && isEmployer();
+        allow read: if canReadEmployee(employeeId);
+        allow write: if canReadEmployee(employeeId) && isEmployer();
 
         // Monthly payments
         match /monthlyPayments/{month} {
-          allow read: if canAccessEmployee(employeeId);
-          allow write: if canAccessEmployee(employeeId) && isEmployer();
+          allow read: if canReadEmployee(employeeId);
+          allow create, delete: if canReadEmployee(employeeId) && isEmployer();
+          allow update: if (canReadEmployee(employeeId) && isEmployer()) || canSignPayment(employeeId);
         }
 
         // Pension payments
         match /pensionPayments/{month} {
-          allow read: if canAccessEmployee(employeeId);
-          allow write: if canAccessEmployee(employeeId) && isEmployer();
+          allow read: if canReadEmployee(employeeId);
+          allow write: if canReadEmployee(employeeId) && isEmployer();
         }
       }
 
       // Audit log – append only for auth users, read only for employer/admin
       match /auditLog/{logId} {
-        allow read: if canAccessEmployee(employeeId);
-        allow create: if canAccessEmployee(employeeId);
+        allow read: if canReadEmployee(employeeId);
+        allow create: if canReadEmployee(employeeId);
         allow update, delete: if false; // immutable
       }
     }

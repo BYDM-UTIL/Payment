@@ -28,7 +28,7 @@ export function LoginPage() {
         await createUserProfile(uid, {
           email: result.user.email || email,
           displayName: result.user.displayName || 'משתמש',
-          role: 'admin', // First user is admin
+          role: 'employer',
           defaultLanguage: 'he',
           createdAt: new Date().toISOString()
         })

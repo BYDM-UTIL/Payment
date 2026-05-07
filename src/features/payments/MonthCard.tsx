@@ -9,7 +9,7 @@ interface Props {
   month: number
   payment: MonthlyPayment | null
   onEdit: () => void
-  onSign: () => void
+  onSign?: () => void
   onAttach: () => void
   onViewSignature: () => void
 }
@@ -43,7 +43,7 @@ export function MonthCard({ month, payment, onEdit, onSign, onAttach, onViewSign
             <button onClick={onViewSignature} className="p-2 text-success-600 hover:bg-success-50 rounded-xl" title={t('payments.viewSignature')}>
               <Eye size={16} />
             </button>
-          ) : payment?.grossTotal ? (
+          ) : payment?.grossTotal && onSign ? (
             <button onClick={onSign} className="p-2 text-primary-600 hover:bg-primary-50 rounded-xl" title={t('payments.signMonth')}>
               <PenLine size={16} />
             </button>

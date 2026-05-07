@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "לוח בקרה",
     "payments": "תשלומים",
+    "myPayments": "התשלומים שלי",
     "pension": "פנסיה",
     "employees": "עובדים",
     "reports": "דוחות",
@@ -35,6 +36,7 @@
   },
   "payments": {
     "title": "מעקב תשלומים",
+    "myPaymentsTitle": "התשלומים שלי",
     "month": "חודש",
     "baseSalary": "משכורת בסיס",
     "pocketMoney": "דמי כיס",
@@ -63,7 +65,13 @@
     "uploadFile": "העלה קובץ",
     "yearlyOverview": "סקירה שנתית",
     "allMonths": "כל החודשים",
-    "noData": "אין נתונים לשנה זו"
+    "noData": "אין נתונים לשנה זו",
+    "noPaymentsToShow": "לא נמצאו תשלומים להצגה",
+    "signatureStatus": "סטטוס חתימה",
+    "signedStatus": "נחתם",
+    "notSignedStatus": "טרם נחתם",
+    "signatureSaved": "החתימה נשמרה בהצלחה",
+    "alreadySigned": "התשלום כבר נחתם"
   },
   "status": {
     "paid": "שולם",
@@ -231,7 +239,8 @@
     "download": "הורד",
     "upload": "העלה",
     "view": "צפה",
-    "print": "הדפס"
+    "print": "הדפס",
+    "logOff": "התנתקות"
   },
   "validation": {
     "required": "שדה זה הוא חובה",

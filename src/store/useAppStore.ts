@@ -7,6 +7,7 @@ interface AppState {
   // Auth
   user: AppUser | null
   setUser: (user: AppUser | null) => void
+  clearSession: () => void
 
   // Current employee & year
   currentEmployeeId: string | null
@@ -25,6 +26,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       user: null,
       setUser: (user) => set({ user }),
+      clearSession: () => set({ user: null, currentEmployeeId: null }),
 
       currentEmployeeId: null,
       setCurrentEmployeeId: (id) => set({ currentEmployeeId: id }),

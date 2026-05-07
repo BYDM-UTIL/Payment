@@ -19,9 +19,10 @@ interface Props {
   year: number
   existing?: MonthlyPayment | null
   defaults: { baseSalary: number; pocketMoney: number; shabbatRate: number }
+  readOnly?: boolean
 }
 
-export function PaymentModal({ open, onClose, onSave, month, year, existing, defaults }: Props) {
+export function PaymentModal({ open, onClose, onSave, month, year, existing, defaults, readOnly = false }: Props) {
   const { t } = useTranslation()
 
   const {
@@ -101,7 +102,7 @@ export function PaymentModal({ open, onClose, onSave, month, year, existing, def
     <Modal
       open={open}
       onClose={onClose}
-      title={`${t('payments.editPayment')} – ${t(`months.${month}`)} ${year}`}
+      title={`${readOnly ? t('common.view') : t('payments.editPayment')} – ${t(`months.${month}`)} ${year}`}
       size="lg"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -110,19 +111,19 @@ export function PaymentModal({ open, onClose, onSave, month, year, existing, def
           <p className="text-sm font-semibold text-blue-800 mb-3">{t('payments.grossTotal')}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <FormField label={t('payments.baseSalary')} error={errors.baseSalary?.message}>
-              <Input type="number" {...register('baseSalary', { valueAsNumber: true })} error={!!errors.baseSalary} />
+              <Input type="number" disabled={readOnly} {...register('baseSalary', { valueAsNumber: true })} error={!!errors.baseSalary} />
             </FormField>
             <FormField label={t('payments.pocketMoney')} error={errors.pocketMoney?.message}>
-              <Input type="number" {...register('pocketMoney', { valueAsNumber: true })} error={!!errors.pocketMoney} />
+              <Input type="number" disabled={readOnly} {...register('pocketMoney', { valueAsNumber: true })} error={!!errors.pocketMoney} />
             </FormField>
             <FormField label={t('payments.shabbat')} error={errors.shabbatAmount?.message}>
-              <Input type="number" {...register('shabbatAmount', { valueAsNumber: true })} error={!!errors.shabbatAmount} />
+              <Input type="number" disabled={readOnly} {...register('shabbatAmount', { valueAsNumber: true })} error={!!errors.shabbatAmount} />
             </FormField>
             <FormField label={t('payments.vacation')} error={errors.vacationAmount?.message}>
-              <Input type="number" {...register('vacationAmount', { valueAsNumber: true })} error={!!errors.vacationAmount} />
+              <Input type="number" disabled={readOnly} {...register('vacationAmount', { valueAsNumber: true })} error={!!errors.vacationAmount} />
             </FormField>
             <FormField label={t('payments.holiday')} error={errors.holidayAmount?.message}>
-              <Input type="number" {...register('holidayAmount', { valueAsNumber: true })} error={!!errors.holidayAmount} />
+              <Input type="number" disabled={readOnly} {...register('holidayAmount', { valueAsNumber: true })} error={!!errors.holidayAmount} />
             </FormField>
           </div>
           <div className="mt-2 text-sm font-semibold text-blue-800">
@@ -135,13 +136,13 @@ export function PaymentModal({ open, onClose, onSave, month, year, existing, def
           <p className="text-sm font-semibold text-green-800 mb-3">{t('payments.totalPaid')}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <FormField label={t('payments.cash')} error={errors.cashPaid?.message}>
-              <Input type="number" {...register('cashPaid', { valueAsNumber: true })} error={!!errors.cashPaid} />
+              <Input type="number" disabled={readOnly} {...register('cashPaid', { valueAsNumber: true })} error={!!errors.cashPaid} />
             </FormField>
             <FormField label={t('payments.payslip')} error={errors.payslipPaid?.message}>
-              <Input type="number" {...register('payslipPaid', { valueAsNumber: true })} error={!!errors.payslipPaid} />
+              <Input type="number" disabled={readOnly} {...register('payslipPaid', { valueAsNumber: true })} error={!!errors.payslipPaid} />
             </FormField>
             <FormField label={t('payments.bankTransfer')} error={errors.bankTransferPaid?.message}>
-              <Input type="number" {...register('bankTransferPaid', { valueAsNumber: true })} error={!!errors.bankTransferPaid} />
+              <Input type="number" disabled={readOnly} {...register('bankTransferPaid', { valueAsNumber: true })} error={!!errors.bankTransferPaid} />
             </FormField>
           </div>
           <div className="mt-2 flex flex-wrap gap-4 text-sm font-semibold text-green-800">
@@ -158,27 +159,36 @@ export function PaymentModal({ open, onClose, onSave, month, year, existing, def
         {/* Metadata */}
         <div className="grid grid-cols-2 gap-3">
           <FormField label={t('payments.paymentDate')}>
-            <Input type="date" {...register('paymentDate')} />
+            <Input type="date" disabled={readOnly} {...register('paymentDate')} />
           </FormField>
           <FormField label="">
             <label className="flex items-center gap-2 cursor-pointer mt-5">
-              <input type="checkbox" {...register('hasPayslip')} className="w-4 h-4 rounded" />
+              <input type="checkbox" disabled={readOnly} {...register('hasPayslip')} className="w-4 h-4 rounded" />
               <span className="text-sm">{t('payments.hasPayslip')}</span>
             </label>
           </FormField>
         </div>
 
         <FormField label={t('payments.notes')}>
-          <Textarea {...register('notes')} />
+          <Textarea disabled={readOnly} {...register('notes')} />
         </FormField>
+
+        {existing?.signedAt && (
+          <div className="rounded-2xl border border-primary-100 bg-primary-50/70 px-4 py-3 text-sm text-gray-700">
+            <p>{t('common.signedOn')}: {existing.signedAt}</p>
+            {existing.signedBy && <p>{t('common.signedBy')}: {existing.signedBy}</p>}
+          </div>
+        )}
 
         <div className="flex gap-2 pt-2">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>
-            {t('common.cancel')}
+            {readOnly ? t('common.close') : t('common.cancel')}
           </button>
-          <button type="submit" className="btn-primary flex-1" disabled={isSubmitting}>
-            {isSubmitting ? t('common.loading') : t('payments.savePayment')}
-          </button>
+          {!readOnly && (
+            <button type="submit" className="btn-primary flex-1" disabled={isSubmitting}>
+              {isSubmitting ? t('common.loading') : t('payments.savePayment')}
+            </button>
+          )}
         </div>
       </form>
     </Modal>

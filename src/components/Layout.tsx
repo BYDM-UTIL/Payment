@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
@@ -10,13 +10,15 @@ import {
   BookOpen,
   Menu,
   X,
+  LogOut,
 } from 'lucide-react'
 import { useState } from 'react'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { useAppStore } from '@/store/useAppStore'
 import clsx from 'clsx'
+import { logout } from '@/services/firebase/auth.service'
 
-const navItems = [
+const employerNavItems = [
   { to: '/',           labelKey: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/payments',   labelKey: 'nav.payments',  Icon: CreditCard },
   { to: '/pension',    labelKey: 'nav.pension',   Icon: Coins },
@@ -26,10 +28,29 @@ const navItems = [
   { to: '/guide',      labelKey: 'nav.guide',     Icon: BookOpen },
 ]
 
+const employeeNavItems = [
+  { to: '/my-payments', labelKey: 'nav.myPayments', Icon: CreditCard },
+]
+
 export function Layout() {
   const { t } = useTranslation()
-  const { user } = useAppStore()
+  const navigate = useNavigate()
+  const { user, clearSession } = useAppStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const navItems = user?.role === 'employee' ? employeeNavItems : employerNavItems
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    try {
+      clearSession()
+      await logout()
+      navigate('/login', { replace: true })
+    } finally {
+      setLoggingOut(false)
+      setMenuOpen(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -49,6 +70,15 @@ export function Layout() {
           {user && (
             <span className="hidden sm:block text-sm text-gray-500">{user.displayName}</span>
           )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut size={16} />
+            <span>{t('common.logOff')}</span>
+          </button>
         </div>
       </header>
 
@@ -109,6 +139,17 @@ export function Layout() {
                   </NavLink>
                 ))}
               </nav>
+              <div className="mt-auto px-2 pt-4">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-60"
+                >
+                  <LogOut size={18} />
+                  {t('common.logOff')}
+                </button>
+              </div>
             </aside>
           </div>
         )}

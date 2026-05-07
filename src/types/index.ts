@@ -1,12 +1,13 @@
 // ─── Users & Auth ────────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'employer' | 'viewer'
+export type UserRole = 'employer' | 'employee'
 
 export interface AppUser {
   uid: string
   displayName: string
   email: string
   role: UserRole
+  employeeId?: string
   createdAt: string
   defaultLanguage: 'he' | 'ru' | 'en'
 }
@@ -86,6 +87,7 @@ export interface MonthlyPayment {
   paymentStatus: PaymentStatus
   paymentDate?: string
   notes?: string
+  signed?: boolean
   employeeSignatureUrl?: string
   signedAt?: string
   signedBy?: string
