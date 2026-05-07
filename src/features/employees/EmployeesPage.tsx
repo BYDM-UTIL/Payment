@@ -24,7 +24,10 @@ export function EmployeesPage() {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<EmployeeFormData>({
       resolver: zodResolver(employeeSchema),
+      mode: 'onChange',
       defaultValues: {
+        fullName: '',
+        startDate: '',
         baseSalary: 6400,
         pocketMoney: 400,
         shabbatRate: 426,
@@ -32,6 +35,7 @@ export function EmployeesPage() {
         holidayRate: 426,
         partialDayRate: 256,
         pensionRate: 12.5,
+        notes: '',
       },
     })
 
@@ -82,24 +86,35 @@ export function EmployeesPage() {
   }
 
   async function onSubmit(data: EmployeeFormData) {
-    if (!user) return
-    if (editEmployee) {
-      await updateEmployee(editEmployee.id, { ...data, updatedAt: new Date().toISOString() })
-      setEmployees((prev) => prev.map((e) => e.id === editEmployee.id ? { ...e, ...data } : e))
-    } else {
-      const id = await createEmployee({ ...data, employerId: user.uid, active: true })
-      const newEmp: Employee = {
-        id,
-        employerId: user.uid,
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        ...data,
+    try {
+      if (!user) {
+        alert('No user found')
+        return
       }
-      setEmployees((prev) => [...prev, newEmp])
-      setCurrentEmployeeId(id)
+      
+      if (editEmployee) {
+        await updateEmployee(editEmployee.id, { ...data, updatedAt: new Date().toISOString() })
+        setEmployees((prev) => prev.map((e) => e.id === editEmployee.id ? { ...e, ...data } : e))
+      } else {
+        const id = await createEmployee({ ...data, employerId: user.uid, active: true })
+        const newEmp: Employee = {
+          id,
+          employerId: user.uid,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          ...data,
+        }
+        setEmployees((prev) => [...prev, newEmp])
+        setCurrentEmployeeId(id)
+        alert('Employee saved successfully!')
+      }
+      setModalOpen(false)
+      reset()
+    } catch (error) {
+      console.error('Error saving employee:', error)
+      alert(`Error: ${error instanceof Error ? error.message : String(error)}`)
     }
-    setModalOpen(false)
   }
 
   return (

@@ -26,9 +26,12 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean
 }
 
-export function Input({ error, className, ...props }: InputProps) {
+export function Input({ error, className, type, value, onChange, ...props }: InputProps) {
   return (
     <input
+      type={type}
+      value={value}
+      onChange={onChange}
       className={clsx('input', error && 'input-error', className)}
       {...props}
     />

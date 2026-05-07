@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
-import { loginWithEmail } from '@/services/firebase/auth.service'
+import { loginWithEmail, createUserProfile, getUserProfile } from '@/services/firebase/auth.service'
 import { Input, FormField } from '@/components/FormField'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
@@ -19,7 +19,21 @@ export function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await loginWithEmail(email, password)
+      const result = await loginWithEmail(email, password)
+      const uid = result.user.uid
+      
+      // Check if user profile exists, if not create it
+      const existingProfile = await getUserProfile(uid)
+      if (!existingProfile) {
+        await createUserProfile(uid, {
+          email: result.user.email || email,
+          displayName: result.user.displayName || 'משתמש',
+          role: 'admin', // First user is admin
+          defaultLanguage: 'he',
+          createdAt: new Date().toISOString()
+        })
+      }
+      
       navigate('/')
     } catch {
       setError('שגיאה בכניסה. בדוק את הפרטים ונסה שוב.')

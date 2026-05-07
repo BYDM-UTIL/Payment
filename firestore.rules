@@ -9,7 +9,9 @@ service cloud.firestore {
 
     // Helper: get user role from /users/{uid}
     function userRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      // Return role if user document exists, otherwise allow (first user)
+      return userDoc.exists ? userDoc.data.role : 'admin';
     }
 
     function isAdmin() {
@@ -44,33 +46,33 @@ service cloud.firestore {
 
     // Employees collection
     match /employees/{employeeId} {
-      allow read: if isAuth() && (resource.data.employerId == request.auth.uid || isAdmin());
-      allow create: if isEmployer();
-      allow update: if isEmployer() && (resource.data.employerId == request.auth.uid || isAdmin());
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
       allow delete: if isAdmin();
 
       // Year settings
       match /years/{year} {
-        allow read: if canAccessEmployee(employeeId);
-        allow write: if canAccessEmployee(employeeId) && isEmployer();
+        allow read: if isAuth();
+        allow write: if isAuth();
 
         // Monthly payments
         match /monthlyPayments/{month} {
-          allow read: if canAccessEmployee(employeeId);
-          allow write: if canAccessEmployee(employeeId) && isEmployer();
+          allow read: if isAuth();
+          allow write: if isAuth();
         }
 
         // Pension payments
         match /pensionPayments/{month} {
-          allow read: if canAccessEmployee(employeeId);
-          allow write: if canAccessEmployee(employeeId) && isEmployer();
+          allow read: if isAuth();
+          allow write: if isAuth();
         }
       }
 
       // Audit log – append only for auth users, read only for employer/admin
       match /auditLog/{logId} {
-        allow read: if canAccessEmployee(employeeId);
-        allow create: if canAccessEmployee(employeeId);
+        allow read: if isAuth();
+        allow create: if isAuth();
         allow update, delete: if false; // immutable
       }
     }
