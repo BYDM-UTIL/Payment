@@ -19,10 +19,10 @@ export function SettingsPage() {
     pensionRate: 12.5,
     recuperationRate: 378,
     recuperationDays: 6,
-    employerName: 'דותן זיוה',
+    employerName: 'Nofam Care Services',
     employerPhone: '',
     employerEmail: '',
-    employeeName: 'KABULOVA MOKHCHEKHRA',
+    employeeName: 'Lina Markov',
   })
 
   function handleSave() {

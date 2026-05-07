@@ -1,363 +1,215 @@
-# מעקב תשלומים לעובדת זרה
-# Foreign Worker Payment Tracker
-# Учёт платежей иностранному работнику
+﻿# Foreign Worker Payment Tracker
 
-[![CI](https://github.com/your-username/foreign-worker-payment-tracker/workflows/CI/badge.svg)](https://github.com/your-username/foreign-worker-payment-tracker/actions)
+Production-ready web + mobile PWA for managing salary, pension, signatures, and reports for a foreign worker.
 
-אפליקציה **100% חינמית** לניהול תשלומים ופנסיה לעובדים זרים. תומכת בעברית, רוסית ואנגלית. עובדת ב-iPhone ודסקטופ, PWA מלא.
+This project is intentionally built on free services only:
+- Firebase Spark (Auth, Firestore, Storage, Hosting)
+- GitHub public repository
+- No paid infrastructure
 
----
+## Privacy and Demo Data Policy
 
-## 📱 תכונות
+This repository must never include real personal names or private identities.
 
-- **ניהול תשלומים** - מעקב חודשי בתשלומים (משכורת, דמי כיס, שבת, חופש, חגים)
-- **פנסיה ופיצויים** - ניהול חישוב 12.5% פנסיה ודמי הבראה
-- **חתימה דיגיטלית** - חתימת עובדת ישירות על המסך
-- **דוחות וייצוא** - PDF שנתי/חודשי, Excel, דוח חתום
-- **עברית RTL מלא** - ממשק מותאם בעברית, רוסית ואנגלית
-- **PWA** - התקנה למסך הבית באייפון
-- **Offline ready** - עבודה חלקית ללא אינטרנט
-- **Mobile-first** - ממשק אופטימלי לסמארטפון
+Rules:
+- Demo data uses fictional names only.
+- Example identities are synthetic and generated for testing.
+- Do not commit real worker names, employer names, phone numbers, or IDs.
 
----
+## Fictional Full Demo Dataset (2026)
 
-## 🔧 טכנולוגיות
+The app includes a complete fictional demo dataset:
+- 1 fictional employer profile
+- 1 fictional employee profile
+- 12 monthly payment records (full year)
+- 12 pension payment records (full year)
+- year settings + seed audit log
 
-**Frontend:**
-- React 18 + TypeScript
-- Vite (build tool)
-- Tailwind CSS
-- React Router
-- React Hook Form + Zod
-- i18next (תרגומים)
-- Recharts (גרפים)
-- Zustand (state)
+Seed source files:
+- src/data/seed2026.ts
+- src/services/firebase/seed.service.ts
 
-**Backend (Firebase Free Tier):**
-- Firestore (בסיס נתונים)
-- Firebase Auth (משתמשים)
-- Firebase Storage (קבצים)
-- Firebase Hosting (פריסה חינמית)
+### Load Demo Dataset
 
-**CI/CD:**
-- GitHub Actions (בדיקות build/lint)
+Use the seed service in admin code:
 
----
+```ts
+import { seedInitial2026Data } from '@/services/firebase/seed.service'
 
-## 💰 עלויות
-
-### **עלות: 0₪ לחלוטין!**
-
-- ✅ Firebase Free Tier - חינמי לחלוטין
-- ✅ GitHub - חינמי (private/public)
-- ✅ GitHub Actions - חינמי לחלוטין
-- ✅ Firebase Hosting - 10GB חינמי חודשי (יותר מספיק)
-- ✅ Firestore - 1GB חינמי + 50K קריאות/כתיבות/מחיקות יומיות
-- ✅ Storage - 5GB חינמי
-- ✅ SSL/HTTPS - חינמי
-
----
-
-## ⚙️ התקנה מקומית
-
-### דרישות
-
-- Node.js 18+ (תקחו מ- [nodejs.org](https://nodejs.org), חינמי)
-- npm או yarn
-- חשבון Firebase (יצור ב-[firebase.google.com](https://firebase.google.com), חינמי)
-- חשבון GitHub (יצור ב-[github.com](https://github.com), חינמי)
-
-### צעדים
-
-#### 1. Clone ה-Repository
-
-```bash
-git clone https://github.com/your-username/foreign-worker-payment-tracker.git
-cd foreign-worker-payment-tracker
+await seedInitial2026Data({ userId: currentUser.uid })
 ```
 
-#### 2. התקנת Dependencies
+Result:
+- Creates/updates fictional employer and employee records
+- Creates all months for salary and pension in year 2026
+- Leaves no real names in the seeded data
+
+## Local Development
+
+### Requirements
+- Node.js 18+
+- npm
+- Firebase project on Spark plan
+
+### Setup
 
 ```bash
 npm install
-```
-
-#### 3. הגדרת Firebase (חינמי!)
-
-1. צור project חדש ב-[Firebase Console](https://console.firebase.google.com/)
-2. בחר **"Free Plan"** (Spark)
-3. כדי להשתמש ב-Firestore ו-Storage, אפשר אותם בקונסול
-4. לך ל-**Project Settings** → **Service Accounts** → **Generate New Private Key**
-5. העתק ה-Config ממסך ה-SDK:
-
-```javascript
-const firebaseConfig = {
-  apiKey: "...",
-  authDomain: "...",
-  projectId: "...",
-  storageBucket: "...",
-  messagingSenderId: "...",
-  appId: "...",
-};
-```
-
-#### 4. יצירת `.env.local` (משתנים סביבה)
-
-העתק את ה-.env.example וחכום אותו:
-
-```bash
 cp .env.example .env.local
 ```
 
-מלא ב-Firebase config values שלך:
+Set Firebase values in `.env.local`:
 
 ```env
-VITE_FIREBASE_API_KEY=xxxxxxxxxxxx
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=xxxxxxxxxxxxxx
-VITE_FIREBASE_APP_ID=x:xxxxxxxxxxxxx:web:xxxxxxxxxxxxx
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
 ```
 
-#### 5. הרצה מקומית
+Run app:
 
 ```bash
 npm run dev
 ```
 
-התוכנה תפתח ב- http://localhost:5173
-
-#### 6. Build לפריסה
+Build app:
 
 ```bash
 npm run build
 ```
 
-הקבצים המוכנים יהיו בתיקייה `dist/`
-
----
-
-## 🚀 פריסה ל-Firebase Hosting (חינמי!)
-
-### דרישות
-
-- [Firebase CLI](https://firebase.google.com/docs/cli) (חינמי)
-  ```bash
-  npm install -g firebase-tools
-  ```
-
-### צעדים
-
-#### 1. Login ל-Firebase
+## Deployment (Free)
 
 ```bash
-firebase login
+npx firebase-tools deploy --only hosting --project <your-project-id>
 ```
 
-#### 2. Initialize Firebase Hosting
+For rules/indexes:
 
 ```bash
-firebase init hosting
-# בחר את ה-project שלך
-# בשאלה "What do you want to use as your public directory?" תשובה: dist
-# בשאלה "Configure as a single-page app?" תשובה: y
+npx firebase-tools deploy --only firestore --project <your-project-id>
+npx firebase-tools deploy --only storage --project <your-project-id>
 ```
 
-#### 3. Build והעלאה
+## Full QA Test Plan (All Pages, End-to-End)
+
+This checklist is designed to prove all routes and critical flows are working.
+
+### Preconditions
+- Auth user exists in Firebase Auth
+- Corresponding profile exists in `/users/{uid}`
+- Firestore rules deployed
+- Storage initialized in Firebase Console
+- Demo seed loaded (recommended)
+
+### Route Coverage
+
+1. Login (`/login`)
+- Enter valid credentials and confirm redirect to `/`
+- Enter invalid credentials and confirm error message
+- Switch language and confirm UI updates
+
+2. Dashboard (`/`)
+- Confirm KPI cards render
+- Confirm yearly chart renders
+- Confirm reminders section renders
+- Use quick action button and navigate to Payments
+
+3. Payments (`/payments`)
+- Open monthly edit modal
+- Save salary components and paid amounts
+- Verify status updates (paid/partial/pending)
+- Add signature and verify it appears
+- Upload attachment (after Storage setup)
+
+4. Pension (`/pension`)
+- Open month edit
+- Save pension amount paid
+- Verify yearly pension totals update
+
+5. Employees (`/employees`)
+- Create a new fictional employee
+- Edit employee and save changes
+- Select active employee and verify context switches
+
+6. Reports (`/reports`)
+- Generate PDF yearly report
+- Generate monthly report
+- Export Excel and verify file download
+
+7. Settings (`/settings`)
+- Change year and verify page data context updates
+- Edit rates and basic details (fictional only)
+- Save and verify success state
+
+8. Guide (`/guide`)
+- Open FAQ/help content
+- Confirm translations and layout on mobile/desktop
+
+### Integration Checks
+
+1. i18n
+- Validate Hebrew, Russian, English across every page
+- Validate RTL/LTR layout direction switching
+
+2. Firestore persistence
+- Refresh browser after edits and verify data persists
+- Verify data appears under correct employee/year path
+
+3. Authorization
+- Verify authenticated user can only access allowed records
+- Verify logout returns user to login route
+
+4. PWA
+- Install from mobile browser
+- Open from home screen
+- Verify app shell loads correctly
+
+### Exit Criteria
+- All routes open without runtime errors
+- CRUD succeeds on Employees, Payments, Pension
+- Reports export successfully
+- No real names exist in code, seeds, or screenshots
+- Build passes without TypeScript errors
+
+## Latest Verification Run
+
+Date: 2026-05-07
+
+Executed smoke navigation (authenticated session) on production hosting:
+- Login page loaded and authenticated successfully
+- Dashboard opened
+- Payments opened
+- Pension opened
+- Employees opened
+- Reports opened
+- Settings opened
+- Guide opened
+
+Technical checks completed in the same iteration:
+- `npm run build` passed
+- `npm run lint` passed (TypeScript version warning only)
+- Firestore rules deployed successfully
+- Hosting deployed successfully
+
+## Scripts
 
 ```bash
-npm run build
-firebase deploy
-```
-
-ה-URL שלך יהיה: `https://your-project.firebaseapp.com`
-
----
-
-## 👤 משתמשים וקומפוזיציה (Firebase Auth - חינמי)
-
-Firebase Auth מאפשר:
-- Email/Password auth
-- Google Sign-In (חינמי)
-- GitHub Sign-In (חינמי)
-
-### יצירת משתמש ראשון (Admin)
-
-1. בקונסול Firebase → **Authentication** → **Users**
-2. לחץ **Add User**
-3. הזן email וסיסמה
-4. בקונסול Firebase → **Firestore** → **Collections** → **users** → **{uid}**
-5. הוסף document עם:
-
-```json
-{
-  "displayName": "Admin Name",
-  "email": "admin@example.com",
-  "role": "admin",
-  "createdAt": "2026-01-01T00:00:00Z",
-  "defaultLanguage": "he"
-}
-```
-
----
-
-## 📊 מבנה הנתונים (Firestore Free Tier)
-
-```
-users/{userId}
-  - displayName, email, role, defaultLanguage
-
-employees/{employeeId}
-  - fullName, startDate, baseSalary, ...
-  
-  years/{year}
-    monthlyPayments/{month}
-      - baseSalary, cashPaid, payslipPaid, bankTransferPaid, ...
-    
-    pensionPayments/{month}
-      - requiredPensionAmount, amountPaid, ...
-    
-    auditLog/{logId}
-      - action, entityType, before, after, ...
-```
-
----
-
-## 🔒 אבטחה (Firestore Security Rules חינמיות)
-
-- ✅ כל משתמש רואה רק את הנתונים שלו
-- ✅ Admin רואה הכל
-- ✅ חתימות ופרטיות שמורים בעיצומם בענן (Firebase Storage)
-
-צפה ב-`firestore.rules` ו-`storage.rules`
-
----
-
-## 🌍 שפות
-
-- 🇮🇱 עברית (RTL, ברירת מחדל)
-- 🇷🇺 רוסית
-- 🇬🇧 אנגלית
-
-בחר שפה מלחצן בחלק העליון של האפליקציה.
-
----
-
-## 🗂️ מבנה תיקייה
-
-```
-src/
-├── app/
-├── components/            # UI components (Modal, Form, Layout)
-├── features/             # Pages (Dashboard, Payments, Pension, etc)
-├── services/
-│   └── firebase/        # Auth, Firestore, Storage
-├── hooks/               # useAuth, usePayments, usePension
-├── store/               # Zustand stores
-├── utils/
-│   ├── calculations.ts  # Business logic
-│   ├── dates.ts
-│   └── validation.ts
-├── i18n/                # Translations (he.json, ru.json, en.json)
-├── types/               # TypeScript interfaces
-└── styles/              # Tailwind CSS globals
-```
-
----
-
-## 🧪 בדיקות ובניה
-
-```bash
-# Lint code
+npm run dev
 npm run lint
-
-# Build for production
 npm run build
-
-# Preview production build
 npm run preview
 ```
 
----
+## Security
 
-## 📝 מידע ביוני ערך (Demo Seed Data)
+Review and keep these updated:
+- firestore.rules
+- storage.rules
 
-בפרויקט מצורפים נתוני seed 2026 עם:
-- עובדת: KABULOVA MOKHCHEKHRA
-- מעסיק: דותן זיוה
-- תשלומים: ינואר–אפריל (מלא)
-- פנסיה: ינואר–יולי (מלא)
+## License
 
-כדי לטעון seed:
-
-```typescript
-import { seedInitial2026Data } from '@/services/firebase/seed.service'
-
-// בקוד admin
-await seedInitial2026Data({ userId: currentUser.uid })
-```
-
----
-
-## 📱 PWA – הוסף למסך בעיתון
-
-### ב-iPhone:
-
-1. פתח את האפליקציה בסאפארי
-2. לחץ **Share** (משולש עם חצים)
-3. בחר **Add to Home Screen**
-4. אישר
-
-האפליקציה תיראה כמו אפליקציה מקומית.
-
----
-
-## 🛠️ CI/CD - GitHub Actions (חינמי!)
-
-כל push ל-`main` רץ:
-- npm install
-- npm run lint
-- npm run build
-
-צפה ב-`.github/workflows/ci.yml`
-
----
-
-## 📄 רישיון
-
-זה פרויקט פתוח. השתמש בחופש.
-
----
-
-## 💬 תמיכה
-
-- 📧 Email: your-email@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/your-username/foreign-worker-payment-tracker/issues)
-
----
-
-## 🚀 Roadmap
-
-- [ ] טוב יותר QR codes ל-invoices
-- [ ] Export ל-WhatsApp/Email עם טבלה
-- [ ] Dark mode
-- [ ] Notifications/Reminders
-- [ ] Multi-employee dashboard
-- [ ] Bank connection integration
-- [ ] SMS/Email reminders
-
----
-
-## ⚡ עצות ביצוע
-
-- **Firebase Free Tier** מספיק ל-10,000 משתמשים פעילים יומית
-- **GitHub Pages + Firebase Hosting** = hosting מושלם וחינמי
-- **GitHub Actions** בדוק כל push בחינם
-- **PWA** תוכנית בדומה לאפליקציה מקומית
-
----
-
-**Made with ❤️ for foreign workers in Israel**
-
-עברית | Русский | English
+MIT

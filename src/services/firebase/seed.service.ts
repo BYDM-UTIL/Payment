@@ -2,7 +2,6 @@ import { writeBatch, doc } from 'firebase/firestore'
 import { db } from './config'
 import { isoNow } from '@/utils/dates'
 import { SEED_2026 } from '@/data/seed2026'
-import { calculatePensionRequired } from '@/utils/calculations'
 
 interface SeedContext {
   userId: string
@@ -12,14 +11,14 @@ interface SeedContext {
 
 export async function seedInitial2026Data(context: SeedContext) {
   const now = isoNow()
-  const employerId = context.employerId ?? 'seed-employer-2026'
-  const employeeId = context.employeeId ?? 'seed-employee-2026'
+  const employerId = context.employerId ?? 'demo-employer-2026'
+  const employeeId = context.employeeId ?? 'demo-employee-2026'
 
   const batch = writeBatch(db)
 
   // User profile defaults to employer role for seed usage
   batch.set(doc(db, 'users', context.userId), {
-    displayName: 'Seed User',
+    displayName: 'Demo Workspace',
     email: '',
     role: 'employer',
     createdAt: now,
@@ -51,7 +50,7 @@ export async function seedInitial2026Data(context: SeedContext) {
     updatedAt: now,
   }, { merge: true })
 
-  // Monthly payments Jan-Apr (provided)
+  // Monthly payments full year
   for (const p of SEED_2026.monthlyPayments) {
     batch.set(doc(db, 'employees', employeeId, 'years', String(SEED_2026.year), 'monthlyPayments', String(p.month)), {
       ...p,
@@ -67,62 +66,13 @@ export async function seedInitial2026Data(context: SeedContext) {
     }, { merge: true })
   }
 
-  // Open months May-Dec
-  for (let month = 5; month <= 12; month += 1) {
-    batch.set(doc(db, 'employees', employeeId, 'years', String(SEED_2026.year), 'monthlyPayments', String(month)), {
-      month,
-      year: SEED_2026.year,
-      baseSalary: 6400,
-      pocketMoney: 400,
-      shabbatAmount: 0,
-      vacationAmount: 0,
-      holidayAmount: 0,
-      grossTotal: 0,
-      cashPaid: 0,
-      payslipPaid: 0,
-      bankTransferPaid: 0,
-      totalPaid: 0,
-      balanceDue: 0,
-      hasPayslip: false,
-      paymentStatus: 'empty',
-      paymentDate: null,
-      notes: '',
-      employeeSignatureUrl: null,
-      signedAt: null,
-      signedBy: null,
-      attachments: [],
-      createdAt: now,
-      updatedAt: now,
-    }, { merge: true })
-  }
-
-  // Pension payments Jan-Jul (provided)
+  // Pension payments full year
   for (const p of SEED_2026.pensionPayments) {
     batch.set(doc(db, 'employees', employeeId, 'years', String(SEED_2026.year), 'pensionPayments', String(p.month)), {
       ...p,
       year: SEED_2026.year,
       paymentDate: null,
-      paymentProvider: 'מתן חן / external',
-      notes: '',
-      attachments: [],
-      createdAt: now,
-      updatedAt: now,
-    }, { merge: true })
-  }
-
-  // Pension open months Aug-Dec
-  for (let month = 8; month <= 12; month += 1) {
-    const baseSalary = 6400
-    const requiredPensionAmount = calculatePensionRequired(baseSalary, 12.5)
-    batch.set(doc(db, 'employees', employeeId, 'years', String(SEED_2026.year), 'pensionPayments', String(month)), {
-      month,
-      year: SEED_2026.year,
-      baseSalary,
-      requiredPensionAmount,
-      amountPaid: 0,
-      balanceDue: requiredPensionAmount,
-      paymentDate: null,
-      paymentProvider: '',
+      paymentProvider: 'Demo Pension Fund',
       notes: '',
       attachments: [],
       createdAt: now,
@@ -136,7 +86,7 @@ export async function seedInitial2026Data(context: SeedContext) {
     entityType: 'settings',
     entityId: `year-${SEED_2026.year}`,
     before: null,
-    after: { seeded: true, source: 'excel-values' },
+    after: { seeded: true, source: 'full-demo-2026' },
     userId: context.userId,
     createdAt: now,
   })
