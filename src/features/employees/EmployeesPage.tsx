@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAppStore } from '@/store/useAppStore'
 import { getEmployees, createEmployee, updateEmployee } from '@/services/firebase/firestore.service'
@@ -13,6 +13,19 @@ import { Plus, Pencil, UserCheck, UserX } from 'lucide-react'
 
 type EmployeeFormData = z.infer<typeof employeeSchema>
 
+const defaultEmployeeValues: EmployeeFormData = {
+  fullName: '',
+  startDate: '',
+  baseSalary: 6400,
+  pocketMoney: 400,
+  shabbatRate: 426,
+  vacationDayRate: 250,
+  holidayRate: 426,
+  partialDayRate: 256,
+  pensionRate: 12.5,
+  notes: '',
+}
+
 export function EmployeesPage() {
   const { t } = useTranslation()
   const { user, currentEmployeeId, setCurrentEmployeeId } = useAppStore()
@@ -20,23 +33,13 @@ export function EmployeesPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
+  const [submitError, setSubmitError] = useState('')
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<EmployeeFormData>({
       resolver: zodResolver(employeeSchema),
       mode: 'onChange',
-      defaultValues: {
-        fullName: '',
-        startDate: '',
-        baseSalary: 6400,
-        pocketMoney: 400,
-        shabbatRate: 426,
-        vacationDayRate: 250,
-        holidayRate: 426,
-        partialDayRate: 256,
-        pensionRate: 12.5,
-        notes: '',
-      },
+      defaultValues: defaultEmployeeValues,
     })
 
   useEffect(() => {
@@ -53,23 +56,14 @@ export function EmployeesPage() {
 
   function openAdd() {
     setEditEmployee(null)
-    reset({
-      fullName: '',
-      startDate: '',
-      baseSalary: 6400,
-      pocketMoney: 400,
-      shabbatRate: 426,
-      vacationDayRate: 250,
-      holidayRate: 426,
-      partialDayRate: 256,
-      pensionRate: 12.5,
-      notes: '',
-    })
+    setSubmitError('')
+    reset(defaultEmployeeValues)
     setModalOpen(true)
   }
 
   function openEdit(emp: Employee) {
     setEditEmployee(emp)
+    setSubmitError('')
     reset({
       fullName: emp.fullName,
       startDate: emp.startDate,
@@ -86,9 +80,10 @@ export function EmployeesPage() {
   }
 
   async function onSubmit(data: EmployeeFormData) {
+    setSubmitError('')
     try {
       if (!user) {
-        alert('No user found')
+        setSubmitError(t('common.error'))
         return
       }
       
@@ -107,13 +102,12 @@ export function EmployeesPage() {
         }
         setEmployees((prev) => [...prev, newEmp])
         setCurrentEmployeeId(id)
-        alert('Employee saved successfully!')
       }
       setModalOpen(false)
-      reset()
+      reset(defaultEmployeeValues)
     } catch (error) {
       console.error('Error saving employee:', error)
-      alert(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      setSubmitError(error instanceof Error ? error.message : t('common.error'))
     }
   }
 
@@ -181,37 +175,137 @@ export function EmployeesPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          {submitError && (
+            <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{submitError}</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label={t('employees.fullName')} required error={errors.fullName?.message}>
-              <Input type="text" {...register('fullName')} error={!!errors.fullName} />
+              <Controller
+                name="fullName"
+                control={control}
+                render={({ field }) => <Input type="text" {...field} error={!!errors.fullName} />}
+              />
             </FormField>
             <FormField label={t('employees.startDate')} required error={errors.startDate?.message}>
-              <Input type="date" {...register('startDate')} error={!!errors.startDate} />
+              <Controller
+                name="startDate"
+                control={control}
+                render={({ field }) => <Input type="date" {...field} error={!!errors.startDate} />}
+              />
             </FormField>
             <FormField label={t('employees.baseSalary')} required error={errors.baseSalary?.message}>
-              <Input type="number" {...register('baseSalary', { valueAsNumber: true })} error={!!errors.baseSalary} />
+              <Controller
+                name="baseSalary"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.baseSalary}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.pocketMoney')} error={errors.pocketMoney?.message}>
-              <Input type="number" {...register('pocketMoney', { valueAsNumber: true })} error={!!errors.pocketMoney} />
+              <Controller
+                name="pocketMoney"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.pocketMoney}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.shabbatRate')} error={errors.shabbatRate?.message}>
-              <Input type="number" {...register('shabbatRate', { valueAsNumber: true })} error={!!errors.shabbatRate} />
+              <Controller
+                name="shabbatRate"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.shabbatRate}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.vacationDayRate')} error={errors.vacationDayRate?.message}>
-              <Input type="number" {...register('vacationDayRate', { valueAsNumber: true })} error={!!errors.vacationDayRate} />
+              <Controller
+                name="vacationDayRate"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.vacationDayRate}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.holidayRate')} error={errors.holidayRate?.message}>
-              <Input type="number" {...register('holidayRate', { valueAsNumber: true })} error={!!errors.holidayRate} />
+              <Controller
+                name="holidayRate"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.holidayRate}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.partialDayRate')} error={errors.partialDayRate?.message}>
-              <Input type="number" {...register('partialDayRate', { valueAsNumber: true })} error={!!errors.partialDayRate} />
+              <Controller
+                name="partialDayRate"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.partialDayRate}
+                  />
+                )}
+              />
             </FormField>
             <FormField label={t('employees.pensionRate')} error={errors.pensionRate?.message}>
-              <Input type="number" step="0.1" {...register('pensionRate', { valueAsNumber: true })} error={!!errors.pensionRate} />
+              <Controller
+                name="pensionRate"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="number"
+                    step="0.1"
+                    {...field}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    error={!!errors.pensionRate}
+                  />
+                )}
+              />
             </FormField>
           </div>
           <FormField label={t('employees.notes')}>
-            <Textarea {...register('notes')} />
+            <Controller
+              name="notes"
+              control={control}
+              render={({ field }) => <Textarea {...field} value={field.value ?? ''} />}
+            />
           </FormField>
           <div className="flex gap-2">
             <button type="button" className="btn-secondary flex-1" onClick={() => setModalOpen(false)}>

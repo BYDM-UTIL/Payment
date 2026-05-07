@@ -1,4 +1,6 @@
 import clsx from 'clsx'
+import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   label: string
@@ -9,6 +11,9 @@ interface Props {
 }
 
 export function FormField({ label, error, children, required, hint }: Props) {
+  const { t } = useTranslation()
+  const displayError = error ? t(error) : undefined
+
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium text-gray-700">
@@ -17,7 +22,7 @@ export function FormField({ label, error, children, required, hint }: Props) {
       </label>
       {children}
       {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
-      {error && <p className="text-xs text-danger-600">{error}</p>}
+      {displayError && <p className="text-xs text-danger-600">{displayError}</p>}
     </div>
   )
 }
@@ -26,39 +31,48 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean
 }
 
-export function Input({ error, className, type, value, onChange, ...props }: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { error, className, ...props },
+  ref
+) {
   return (
     <input
-      type={type}
-      value={value}
-      onChange={onChange}
+      ref={ref}
       className={clsx('input', error && 'input-error', className)}
       {...props}
     />
   )
-}
+})
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean
 }
 
-export function Select({ error, className, children, ...props }: SelectProps) {
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { error, className, children, ...props },
+  ref
+) {
   return (
     <select
+      ref={ref}
       className={clsx('input', error && 'input-error', className)}
       {...props}
     >
       {children}
     </select>
   )
-}
+})
 
-export function Textarea({ error, className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { error?: boolean }) {
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement> & { error?: boolean }
+>(function Textarea({ error, className, ...props }, ref) {
   return (
     <textarea
+      ref={ref}
       rows={3}
       className={clsx('input resize-none', error && 'input-error', className)}
       {...props}
     />
   )
-}
+})

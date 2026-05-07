@@ -22,13 +22,11 @@ service cloud.firestore {
       return isAuth() && (userRole() == 'employer' || userRole() == 'admin');
     }
 
-    // Helper: can current user access a given employee record
     function canAccessEmployee(employeeId) {
-      return isAuth()
-        && (
-          get(/databases/$(database)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
-          || isAdmin()
-        );
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+      );
     }
 
     // Users collection
@@ -46,33 +44,35 @@ service cloud.firestore {
 
     // Employees collection
     match /employees/{employeeId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
+      allow read: if isAuth() && (resource.data.employerId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && (request.resource.data.employerId == request.auth.uid || isAdmin());
+      allow update: if isAuth()
+                    && (resource.data.employerId == request.auth.uid || isAdmin())
+                    && (request.resource.data.employerId == resource.data.employerId || isAdmin());
       allow delete: if isAdmin();
 
       // Year settings
       match /years/{year} {
-        allow read: if isAuth();
-        allow write: if isAuth();
+        allow read: if canAccessEmployee(employeeId);
+        allow write: if canAccessEmployee(employeeId) && isEmployer();
 
         // Monthly payments
         match /monthlyPayments/{month} {
-          allow read: if isAuth();
-          allow write: if isAuth();
+          allow read: if canAccessEmployee(employeeId);
+          allow write: if canAccessEmployee(employeeId) && isEmployer();
         }
 
         // Pension payments
         match /pensionPayments/{month} {
-          allow read: if isAuth();
-          allow write: if isAuth();
+          allow read: if canAccessEmployee(employeeId);
+          allow write: if canAccessEmployee(employeeId) && isEmployer();
         }
       }
 
       // Audit log – append only for auth users, read only for employer/admin
       match /auditLog/{logId} {
-        allow read: if isAuth();
-        allow create: if isAuth();
+        allow read: if canAccessEmployee(employeeId);
+        allow create: if canAccessEmployee(employeeId);
         allow update, delete: if false; // immutable
       }
     }
