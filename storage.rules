@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuth()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function canAccessEmployee(employeeId) {
+      return isAuth()
+        && (
+          firestore.get(/databases/(default)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+          || isAdmin()
+        );
+    }
+
+    // Signatures: signatures/{employeeId}/{year}/{month}/signature.png
+    match /signatures/{employeeId}/{year}/{month}/{fileName} {
+      allow read, write: if canAccessEmployee(employeeId);
+    }
+
+    // Attachments: attachments/{employeeId}/{year}/{month}/{fileName}
+    match /attachments/{employeeId}/{year}/{month}/{fileName} {
+      allow read, write: if canAccessEmployee(employeeId);
+    }
+
+    // Deny all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

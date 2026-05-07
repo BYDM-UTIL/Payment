@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: get user role from /users/{uid}
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuth() && userRole() == 'admin';
+    }
+
+    function isEmployer() {
+      return isAuth() && (userRole() == 'employer' || userRole() == 'admin');
+    }
+
+    // Helper: can current user access a given employee record
+    function canAccessEmployee(employeeId) {
+      return isAuth()
+        && (
+          get(/databases/$(database)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
+          || isAdmin()
+        );
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Employers collection
+    match /employers/{employerId} {
+      allow read: if isAuth() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow create: if isEmployer();
+      allow update, delete: if isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+
+    // Employees collection
+    match /employees/{employeeId} {
+      allow read: if isAuth() && (resource.data.employerId == request.auth.uid || isAdmin());
+      allow create: if isEmployer();
+      allow update: if isEmployer() && (resource.data.employerId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+
+      // Year settings
+      match /years/{year} {
+        allow read: if canAccessEmployee(employeeId);
+        allow write: if canAccessEmployee(employeeId) && isEmployer();
+
+        // Monthly payments
+        match /monthlyPayments/{month} {
+          allow read: if canAccessEmployee(employeeId);
+          allow write: if canAccessEmployee(employeeId) && isEmployer();
+        }
+
+        // Pension payments
+        match /pensionPayments/{month} {
+          allow read: if canAccessEmployee(employeeId);
+          allow write: if canAccessEmployee(employeeId) && isEmployer();
+        }
+      }
+
+      // Audit log – append only for auth users, read only for employer/admin
+      match /auditLog/{logId} {
+        allow read: if canAccessEmployee(employeeId);
+        allow create: if canAccessEmployee(employeeId);
+        allow update, delete: if false; // immutable
+      }
+    }
+  }
+}
