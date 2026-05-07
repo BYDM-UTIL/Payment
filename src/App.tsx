@@ -6,6 +6,7 @@ import type { UserRole } from '@/types'
 import { getLanguageDir } from '@/i18n'
 import { Layout } from '@/components/Layout'
 import { LoginPage } from '@/features/auth/LoginPage'
+import { CompleteEmployeeProfilePage } from '@/features/onboarding/CompleteEmployeeProfilePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { PaymentsPage } from '@/features/payments/PaymentsPage'
 import { PensionPage } from '@/features/pension/PensionPage'
@@ -53,10 +54,37 @@ function RoleRoute({ roles, children }: { roles: UserRole[]; children: React.Rea
   return <>{children}</>
 }
 
+function EmployeeProfileCompletionRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <LoadingScreen />
+  if (!user) return <Navigate to="/login" replace />
+  // If employee and profile not completed, redirect to completion page
+  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+    return <Navigate to="/complete-employee-profile" replace />
+  }
+  return <>{children}</>
+}
+
+function ProfileCompletionRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <LoadingScreen />
+  if (!user) return <Navigate to="/login" replace />
+  // Only allow incomplete employees to access this page
+  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+    return <>{children}</>
+  }
+  // If already completed or is employer, redirect to default path
+  return <Navigate to={getDefaultPath(user.role)} replace />
+}
+
 function HomeRoute() {
   const { user, loading } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
+  // If employee with incomplete profile, redirect to profile completion
+  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+    return <Navigate to="/complete-employee-profile" replace />
+  }
   if (user.role === 'employee') return <Navigate to="/my-payments" replace />
   return <DashboardPage />
 }
@@ -73,6 +101,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/complete-employee-profile" element={<ProfileCompletionRoute><CompleteEmployeeProfilePage /></ProfileCompletionRoute>} />
         <Route
           path="/"
           element={
@@ -83,7 +112,7 @@ export function App() {
         >
           <Route index element={<HomeRoute />} />
           <Route path="payments" element={<RoleRoute roles={['employer']}><PaymentsPage mode="employer" /></RoleRoute>} />
-          <Route path="my-payments" element={<RoleRoute roles={['employee']}><PaymentsPage mode="employee" /></RoleRoute>} />
+          <Route path="my-payments" element={<EmployeeProfileCompletionRoute><RoleRoute roles={['employee']}><PaymentsPage mode="employee" /></RoleRoute></EmployeeProfileCompletionRoute>} />
           <Route path="pension" element={<RoleRoute roles={['employer']}><PensionPage /></RoleRoute>} />
           <Route path="employees" element={<RoleRoute roles={['employer']}><EmployeesPage /></RoleRoute>} />
           <Route path="reports" element={<RoleRoute roles={['employer']}><ReportsPage /></RoleRoute>} />

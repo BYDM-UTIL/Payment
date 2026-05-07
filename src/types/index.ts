@@ -8,6 +8,7 @@ export interface AppUser {
   email: string
   role: UserRole
   employeeId?: string
+  employeeProfileCompleted: boolean
   createdAt: string
   defaultLanguage: 'he' | 'ru' | 'en'
 }
@@ -29,8 +30,15 @@ export interface Employer {
 export interface Employee {
   id: string
   employerId: string
+  userId?: string
+  firstName?: string
+  lastName?: string
   fullName: string
+  passport?: string
+  phone?: string
+  address?: string
   startDate: string
+  bankDetails?: string
   baseSalary: number
   pocketMoney: number
   shabbatRate: number

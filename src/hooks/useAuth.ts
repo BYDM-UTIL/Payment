@@ -23,6 +23,7 @@ export function useAuth() {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'משתמש',
               role: 'employer' as const,
+              employeeProfileCompleted: true,
               defaultLanguage: 'he' as const,
               createdAt: new Date().toISOString()
             }
@@ -30,6 +31,7 @@ export function useAuth() {
               email: newProfile.email,
               displayName: newProfile.displayName,
               role: newProfile.role,
+              employeeProfileCompleted: newProfile.employeeProfileCompleted,
               defaultLanguage: newProfile.defaultLanguage,
               createdAt: newProfile.createdAt,
             })
@@ -42,6 +44,7 @@ export function useAuth() {
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'משתמש',
             role: 'employer' as const,
+            employeeProfileCompleted: true,
             defaultLanguage: 'he' as const,
             createdAt: new Date().toISOString()
           })

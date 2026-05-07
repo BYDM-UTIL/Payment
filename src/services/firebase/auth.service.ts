@@ -1,5 +1,6 @@
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   type User,
@@ -10,7 +11,8 @@ import type { AppUser } from '@/types'
 
 function normalizeUserProfile(uid: string, data: Record<string, unknown>): AppUser {
   const rawRole = data.role
-  const role = rawRole === 'employee' || rawRole === 'viewer' ? 'employee' : 'employer'
+  // Map legacy 'admin' role to 'employer'
+  const role: 'employer' | 'employee' = rawRole === 'employer' ? 'employer' : 'employee'
 
   return {
     uid,
@@ -18,6 +20,7 @@ function normalizeUserProfile(uid: string, data: Record<string, unknown>): AppUs
     displayName: typeof data.displayName === 'string' ? data.displayName : 'משתמש',
     role,
     employeeId: typeof data.employeeId === 'string' ? data.employeeId : undefined,
+    employeeProfileCompleted: typeof data.employeeProfileCompleted === 'boolean' ? data.employeeProfileCompleted : false,
     defaultLanguage:
       data.defaultLanguage === 'ru' || data.defaultLanguage === 'en' ? data.defaultLanguage : 'he',
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
@@ -26,6 +29,10 @@ function normalizeUserProfile(uid: string, data: Record<string, unknown>): AppUs
 
 export async function loginWithEmail(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password)
+}
+
+export async function registerWithEmail(email: string, password: string) {
+  return createUserWithEmailAndPassword(auth, email, password)
 }
 
 export async function logout() {
@@ -44,6 +51,10 @@ export async function getUserProfile(uid: string): Promise<AppUser | null> {
 
 export async function createUserProfile(uid: string, data: Omit<AppUser, 'uid'>) {
   await setDoc(doc(db, 'users', uid), data)
+}
+
+export async function updateUserProfile(uid: string, data: Partial<Omit<AppUser, 'uid'>>) {
+  await setDoc(doc(db, 'users', uid), data, { merge: true })
 }
 
 export async function updateUserLanguage(uid: string, language: string) {
