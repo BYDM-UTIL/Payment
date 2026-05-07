@@ -51,10 +51,11 @@ service cloud.firestore {
         ]);
     }
 
-    // Users collection
+    // Users collection - allow new users to create their profile
     match /users/{userId} {
       allow read: if isAuth() && request.auth.uid == userId;
-      allow write: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth() && request.auth.uid == userId;
+      allow update, delete: if isAuth() && request.auth.uid == userId;
     }
 
     // Employers collection

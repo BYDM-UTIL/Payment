@@ -102,8 +102,27 @@ export function LoginPage() {
         await handleRegisterSubmit()
       }
       navigate('/')
-    } catch {
-      setError(getAuthErrorMessage())
+    } catch (error) {
+      console.error('Auth error:', error)
+      
+      // Better error messages
+      if (error instanceof Error) {
+        if (error.message.includes('email-already-in-use')) {
+          setError('האימייל כבר רשום במערכת. נסה להתחבר או השתמש באימייל אחר.')
+        } else if (error.message.includes('weak-password')) {
+          setError('הסיסמה חלשה מדי. השתמש לפחות 6 תווים.')
+        } else if (error.message.includes('invalid-email')) {
+          setError('כתובת אימייל לא תקינה.')
+        } else if (error.message.includes('user-disabled')) {
+          setError('חשבון זה הוסר או נחסם.')
+        } else if (error.message.includes('too-many-requests')) {
+          setError('יותר מדי ניסיונות כושלים. נסה שוב בעוד כמה דקות.')
+        } else {
+          setError(error.message || getAuthErrorMessage())
+        }
+      } else {
+        setError(getAuthErrorMessage())
+      }
     } finally {
       setLoading(false)
     }
