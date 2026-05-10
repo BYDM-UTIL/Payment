@@ -47,12 +47,20 @@ export async function createEmployee(
     Object.entries(data).filter(([, value]) => value !== undefined)
   )
   
-  const ref = await addDoc(collection(db, 'employees'), {
-    ...cleanData,
-    createdAt: isoNow(),
-    updatedAt: isoNow(),
-  })
-  return ref.id
+  console.log('[Firestore] Creating employee with data:', cleanData)
+  
+  try {
+    const ref = await addDoc(collection(db, 'employees'), {
+      ...cleanData,
+      createdAt: isoNow(),
+      updatedAt: isoNow(),
+    })
+    console.log('[Firestore] Employee created successfully with ID:', ref.id)
+    return ref.id
+  } catch (error) {
+    console.error('[Firestore] Error creating employee:', error)
+    throw error
+  }
 }
 
 export async function updateEmployee(id: string, data: Partial<Employee>) {

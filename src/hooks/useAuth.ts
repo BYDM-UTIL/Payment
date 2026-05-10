@@ -2,6 +2,21 @@ import { useEffect, useState } from 'react'
 import { onAuthChange, getUserProfile, createUserProfile } from '@/services/firebase/auth.service'
 import { useAppStore } from '@/store/useAppStore'
 
+async function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function getUserProfileWithRetry(uid: string, retries = 5, delayMs = 250) {
+  for (let i = 0; i < retries; i++) {
+    const profile = await getUserProfile(uid)
+    if (profile) return profile
+    if (i < retries - 1) {
+      await sleep(delayMs)
+    }
+  }
+  return null
+}
+
 export function useAuth() {
   const { user, setUser, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
@@ -14,7 +29,7 @@ export function useAuth() {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const profile = await getUserProfile(firebaseUser.uid)
+          const profile = await getUserProfileWithRetry(firebaseUser.uid)
           if (profile) {
             setUser(profile)
           } else {
@@ -22,8 +37,8 @@ export function useAuth() {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'משתמש',
-              role: 'employer' as const,
-              employeeProfileCompleted: true,
+              role: 'employee' as const,
+              employeeProfileCompleted: false,
               defaultLanguage: 'he' as const,
               createdAt: new Date().toISOString()
             }
@@ -43,8 +58,8 @@ export function useAuth() {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'משתמש',
-            role: 'employer' as const,
-            employeeProfileCompleted: true,
+            role: 'employee' as const,
+            employeeProfileCompleted: false,
             defaultLanguage: 'he' as const,
             createdAt: new Date().toISOString()
           })

@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '@/hooks/useAuth'
 import { updateUserProfile } from '@/services/firebase/auth.service'
-import { createEmployee } from '@/services/firebase/firestore.service'
+import { createEmployee, updateEmployee } from '@/services/firebase/firestore.service'
 import { FormField, Input, Textarea } from '@/components/FormField'
 import { CheckCircle } from 'lucide-react'
 
@@ -75,6 +75,8 @@ export function CompleteEmployeeProfilePage() {
     try {
       if (!user) throw new Error('User not found')
 
+      console.log('[Profile Page] User object:', { uid: user.uid, role: user.role, email: user.email })
+
       // Create employee record
       const fullName = `${data.firstName} ${data.lastName}`
       const employeeData = {
@@ -92,23 +94,38 @@ export function CompleteEmployeeProfilePage() {
         notes: '',
       } as any
 
+      console.log('[Profile Page] Employee data to submit:', employeeData)
+
       // Only add bankDetails if it's not empty
       if (data.bankDetails?.trim()) {
         employeeData.bankDetails = data.bankDetails
       }
 
-      const employeeId = await createEmployee(employeeData)
+      let employeeId = user.employeeId
 
+      if (employeeId) {
+        console.log('[Profile Page] Updating existing employee ID:', employeeId)
+        await updateEmployee(employeeId, employeeData)
+      } else {
+        console.log('[Profile Page] Calling createEmployee...')
+        employeeId = await createEmployee(employeeData)
+        console.log('[Profile Page] Employee created with ID:', employeeId)
+      }
+
+      console.log('[Profile Page] Updating user profile...')
       // Update user profile with employeeId and set employeeProfileCompleted to true
       await updateUserProfile(user.uid, {
         employeeId,
         employeeProfileCompleted: true,
       })
+      console.log('[Profile Page] User profile updated successfully')
 
+      console.log('[Profile Page] Navigating to /my-payments...')
       // Redirect to payments page
       navigate('/my-payments')
     } catch (err) {
       console.error('Error completing profile:', err)
+      console.error('Error details:', (err as any)?.code, (err as any)?.message)
       setSubmitError('שגיאה בעת שמירת הפרטים. בדוק את הנתונים ונסה שוב.')
     } finally {
       setIsSubmitting(false)

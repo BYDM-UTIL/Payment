@@ -2,13 +2,29 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
-import { loginWithEmail, registerWithEmail, createUserProfile, getUserProfile } from '@/services/firebase/auth.service'
+import {
+  loginWithEmail,
+  registerWithEmail,
+  createUserProfile,
+  getUserProfile,
+  updateUserProfile,
+} from '@/services/firebase/auth.service'
+import { createEmployee } from '@/services/firebase/firestore.service'
 import { Input, FormField } from '@/components/FormField'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
 type AuthMode = 'login' | 'register'
 
 const ADMIN_CREATION_PASSWORD = (import.meta.env.VITE_ADMIN_CREATION_PASSWORD ?? '').trim()
+const DEFAULT_SALARY_VALUES = {
+  baseSalary: 6400,
+  pocketMoney: 400,
+  shabbatRate: 426,
+  vacationDayRate: 250,
+  holidayRate: 426,
+  partialDayRate: 256,
+  pensionRate: 12.5,
+}
 
 function getAuthErrorMessage() {
   return 'שגיאה בביצוע הפעולה. בדוק את הפרטים ונסה שוב.'
@@ -59,16 +75,33 @@ export function LoginPage() {
       console.log('Existing profile:', existingProfile)
 
       if (!existingProfile) {
-        console.log('Creating new employer profile for existing Firebase user')
+        const fallbackDisplayName = result.user.displayName || email.split('@')[0] || 'משתמש'
+        console.log('Profile missing after login, creating safe employee fallback profile')
         await createUserProfile(uid, {
           email: result.user.email || email,
-          displayName: result.user.displayName || 'משתמש',
-          role: 'employer',
-          employeeProfileCompleted: true,
+          displayName: fallbackDisplayName,
+          role: 'employee',
+          employeeProfileCompleted: false,
           defaultLanguage: 'he',
           createdAt: new Date().toISOString(),
         })
-        console.log('Employer profile created')
+
+        const employeeId = await createEmployee({
+          employerId: uid,
+          userId: uid,
+          fullName: fallbackDisplayName,
+          startDate: new Date().toISOString().slice(0, 10),
+          ...DEFAULT_SALARY_VALUES,
+          active: true,
+          notes: '',
+        })
+
+        await updateUserProfile(uid, {
+          employeeId,
+          employeeProfileCompleted: false,
+        })
+
+        console.log('Employee fallback profile created')
       }
     } catch (error) {
       console.error('Login error:', error)
@@ -105,6 +138,23 @@ export function LoginPage() {
         defaultLanguage: 'he',
         createdAt: new Date().toISOString(),
       })
+
+      if (role === 'employee') {
+        const employeeId = await createEmployee({
+          employerId: uid,
+          userId: uid,
+          fullName: displayName.trim(),
+          startDate: new Date().toISOString().slice(0, 10),
+          ...DEFAULT_SALARY_VALUES,
+          active: true,
+          notes: '',
+        })
+
+        await updateUserProfile(uid, {
+          employeeId,
+          employeeProfileCompleted: false,
+        })
+      }
       
       console.log('User profile created successfully')
     } catch (error) {
