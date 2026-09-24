@@ -16,7 +16,17 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db, auth } from './config'
-import type { Employee, MonthlyPayment, PensionPayment, YearSettings, AuditLog } from '@/types'
+import type {
+  Employee,
+  MonthlyPayment,
+  PensionPayment,
+  YearSettings,
+  AuditLog,
+  PaymentRecord,
+  PaymentAuditEntry,
+  PaymentAuditAction,
+  EmploymentTerms,
+} from '@/types'
 import {
   calculateGrossTotal,
   calculateTotalPaid,
@@ -39,6 +49,12 @@ export async function getEmployee(employeeId: string): Promise<Employee | null> 
   const snap = await getDoc(doc(db, 'employees', employeeId))
   if (!snap.exists()) return null
   return { id: snap.id, ...snap.data() } as Employee
+}
+
+export async function getActiveEmployees(employerId: string): Promise<Employee[]> {
+  const q = query(collection(db, 'employees'), where('employerId', '==', employerId))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Employee).filter((employee) => employee.active)
 }
 
 export async function createEmployee(
@@ -71,6 +87,102 @@ export async function updateEmployee(id: string, data: Partial<Employee>) {
 
 export async function deleteEmployee(id: string) {
   await deleteDoc(doc(db, 'employees', id))
+}
+
+type PaymentRecordInput = Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'deletedAt' | 'deletedBy'>
+
+function paymentCollection(employeeId: string) {
+  return collection(db, 'employees', employeeId, 'payments')
+}
+
+function paymentAuditCollection(employeeId: string, paymentId: string) {
+  return collection(db, 'employees', employeeId, 'payments', paymentId, 'audit')
+}
+
+async function addPaymentAudit(
+  employeeId: string,
+  paymentId: string,
+  action: PaymentAuditAction,
+  performedBy: string,
+  performedByName: string,
+  before?: Record<string, unknown>,
+  after?: Record<string, unknown>,
+) {
+  const changedFields = before && after
+    ? Object.keys({ ...before, ...after }).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    : undefined
+  await addDoc(paymentAuditCollection(employeeId, paymentId), {
+    paymentId,
+    caregiverId: employeeId,
+    action,
+    performedBy,
+    performedByName,
+    timestamp: isoNow(),
+    before: before ?? null,
+    after: after ?? null,
+    changedFields: changedFields ?? [],
+  })
+}
+
+export async function getPaymentRecords(employeeId: string, year: number, month?: number): Promise<PaymentRecord[]> {
+  const snap = await getDocs(paymentCollection(employeeId))
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as PaymentRecord)
+    .filter((record) => record.year === year && record.deleted !== true && (!month || record.month === month))
+    .sort((left, right) => right.paymentDate.localeCompare(left.paymentDate))
+}
+
+export async function createPaymentRecord(input: PaymentRecordInput, performedByName: string): Promise<string> {
+  const ref = await addDoc(paymentCollection(input.caregiverId), {
+    ...input,
+    deleted: false,
+    createdAt: isoNow(),
+    updatedAt: isoNow(),
+  })
+  await addPaymentAudit(input.caregiverId, ref.id, 'created', input.createdBy, performedByName, undefined, input as unknown as Record<string, unknown>)
+  return ref.id
+}
+
+export async function updatePaymentRecord(
+  employeeId: string,
+  paymentId: string,
+  data: Partial<PaymentRecordInput>,
+  performedBy: string,
+  performedByName: string,
+) {
+  const ref = doc(paymentCollection(employeeId), paymentId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('payment-not-found')
+  const before = snap.data() as Record<string, unknown>
+  const after = { ...before, ...data, updatedAt: isoNow(), updatedBy: performedBy }
+  await updateDoc(ref, after)
+  await addPaymentAudit(employeeId, paymentId, 'updated', performedBy, performedByName, before, after)
+}
+
+export async function softDeletePayment(employeeId: string, paymentId: string, performedBy: string, performedByName: string) {
+  const ref = doc(paymentCollection(employeeId), paymentId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('payment-not-found')
+  const before = snap.data() as Record<string, unknown>
+  const after = { ...before, deleted: true, deletedAt: isoNow(), deletedBy: performedBy }
+  await updateDoc(ref, { deleted: true, deletedAt: after.deletedAt, deletedBy: performedBy, updatedAt: isoNow(), updatedBy: performedBy })
+  await addPaymentAudit(employeeId, paymentId, 'deleted', performedBy, performedByName, before, after)
+}
+
+export async function getPaymentAudit(employeeId: string, paymentId: string): Promise<PaymentAuditEntry[]> {
+  const snap = await getDocs(query(paymentAuditCollection(employeeId, paymentId), orderBy('timestamp', 'desc')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PaymentAuditEntry)
+}
+
+export async function getCurrentEmploymentTerms(employeeId: string): Promise<EmploymentTerms | null> {
+  const snap = await getDocs(query(collection(db, 'employees', employeeId, 'employmentTerms'), where('active', '==', true)))
+  const terms = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as EmploymentTerms))
+  return terms.sort((left, right) => right.effectiveFrom.localeCompare(left.effectiveFrom))[0] ?? null
+}
+
+export async function createEmploymentTerms(terms: Omit<EmploymentTerms, 'id' | 'createdAt'>) {
+  const ref = await addDoc(collection(db, 'employees', terms.caregiverId, 'employmentTerms'), { ...terms, createdAt: isoNow() })
+  return ref.id
 }
 
 // ─── Year Settings ────────────────────────────────────────────────────────────

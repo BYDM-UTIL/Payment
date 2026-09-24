@@ -123,6 +123,30 @@ service cloud.firestore {
         }
       }
 
+      match /payments/{paymentId} {
+        allow read: if canReadEmployee(employeeId);
+        allow create: if isAdmin()
+                      && request.resource.data.employerId == request.auth.uid
+                      && request.resource.data.caregiverId == employeeId;
+        allow update: if isAdmin()
+                      && resource.data.employerId == request.auth.uid
+                      && request.resource.data.employerId == resource.data.employerId
+                      && request.resource.data.caregiverId == resource.data.caregiverId;
+        allow delete: if false;
+
+        match /audit/{auditId} {
+          allow read: if isAdmin() || isEmployeeOwner(employeeId);
+          allow create: if isAdmin();
+          allow update, delete: if false;
+        }
+      }
+
+      match /employmentTerms/{termsId} {
+        allow read: if canReadEmployee(employeeId);
+        allow create: if isAdmin() && request.resource.data.employerId == request.auth.uid && request.resource.data.caregiverId == employeeId;
+        allow update, delete: if false;
+      }
+
       // Audit log – append only for auth users, read only for employer/admin
       match /auditLog/{logId} {
         allow read: if canReadEmployee(employeeId);

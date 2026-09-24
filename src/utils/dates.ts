@@ -8,6 +8,10 @@ export function formatDate(dateStr: string, pattern = 'dd/MM/yyyy'): string {
   }
 }
 
+export function formatIsraeliDate(dateStr: string): string {
+  return formatDate(dateStr, 'dd/MM/yyyy')
+}
+
 export function formatDateTime(dateStr: string): string {
   try {
     return format(parseISO(dateStr), 'dd/MM/yyyy HH:mm')

@@ -1,377 +1,109 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronLeft, ChevronRight, History, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
-import { usePayments } from '@/hooks/usePayments'
-import { MonthCard } from './MonthCard'
-import { PaymentModal } from './PaymentModal'
-import { SignatureModal } from './SignatureModal'
-import { uploadSignature, uploadFile } from '@/services/firebase/storage.service'
+import { getActiveEmployees, getEmployee, getPaymentAudit, getPaymentRecords, createPaymentRecord, updatePaymentRecord, softDeletePayment, getCurrentEmploymentTerms } from '@/services/firebase/firestore.service'
+import { formatCurrency, calculatePaymentStatus } from '@/utils/calculations'
+import { formatDateTime, formatIsraeliDate } from '@/utils/dates'
 import { StatusBadge } from '@/components/StatusBadge'
-import { formatCurrency } from '@/utils/calculations'
-import { KpiCard } from '@/components/KpiCard'
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
-import type { MonthlyPayment } from '@/types'
+import { PaymentMovementModal } from './PaymentMovementModal'
+import type { Employee, EmploymentTerms, PaymentAuditEntry, PaymentRecord } from '@/types'
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+interface Props { mode?: 'employer' | 'employee' }
+type MovementData = { paymentDate: string; amount: number; paymentMethod: 'cash' | 'bankTransfer'; bankReference?: string; category: PaymentRecord['category']; note?: string }
 
-// Default settings (ideally from Firestore year settings)
-const DEFAULT_SETTINGS = {
-  baseSalary: 6400,
-  pocketMoney: 400,
-  shabbatRate: 426,
-}
-
-interface PaymentsPageProps {
-  mode?: 'employer' | 'employee'
-}
-
-function isPaymentSigned(payment: MonthlyPayment | null) {
-  return payment?.signed === true || Boolean(payment?.employeeSignatureUrl)
-}
-
-export function PaymentsPage({ mode = 'employer' }: PaymentsPageProps) {
+export function PaymentsPage({ mode = 'employer' }: Props) {
   const { t } = useTranslation()
-  const { user, currentEmployeeId, currentYear, setCurrentYear } = useAppStore()
-  const effectiveEmployeeId = mode === 'employee' ? user?.employeeId ?? null : currentEmployeeId
-  const { loading, save, sign, addAttachment, getPaymentByMonth, summary } =
-    usePayments(effectiveEmployeeId, currentYear)
-
-  const [editMonth, setEditMonth] = useState<number | null>(null)
-  const [viewMonth, setViewMonth] = useState<number | null>(null)
-  const [signMonth, setSignMonth] = useState<number | null>(null)
-  const [viewSigMonth, setViewSigMonth] = useState<number | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [attachMonth, setAttachMonth] = useState<number | null>(null)
-  const [successMessage, setSuccessMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-
-  const editPayment = editMonth ? getPaymentByMonth(editMonth) : null
-  const viewPayment = viewMonth ? getPaymentByMonth(viewMonth) : null
-  const viewSigPayment = viewSigMonth ? getPaymentByMonth(viewSigMonth) : null
-  const employeePayments = MONTHS.map((month) => getPaymentByMonth(month)).filter(
-    (payment): payment is MonthlyPayment => Boolean(payment)
-  )
+  const { user, currentEmployeeId, setCurrentEmployeeId } = useAppStore()
+  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [terms, setTerms] = useState<EmploymentTerms | null>(null)
+  const [records, setRecords] = useState<PaymentRecord[]>([])
+  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<PaymentRecord | null>(null)
+  const [history, setHistory] = useState<PaymentAuditEntry[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    setSuccessMessage('')
-    setErrorMessage('')
-  }, [currentYear, effectiveEmployeeId])
-
-  async function handleSavePayment(data: Parameters<typeof save>[1]) {
-    if (!editMonth) return
-    await save(editMonth, data)
-  }
-
-  async function handleSignSave(dataUrl: string) {
-    if (!signMonth || !effectiveEmployeeId || !user) return
-
-    try {
-      setErrorMessage('')
-      const payment = getPaymentByMonth(signMonth)
-      if (isPaymentSigned(payment)) {
-        setErrorMessage(t('payments.alreadySigned'))
-        setSignMonth(null)
-        return
+    let active = true
+    async function loadEmployee() {
+      if (!user) return
+      const list = mode === 'employer' ? await getActiveEmployees(user.uid) : []
+      const selected = mode === 'employee' && user.employeeId
+        ? await getEmployee(user.employeeId)
+        : list.find((item) => item.id === currentEmployeeId) ?? (list.length === 1 ? list[0] : null)
+      if (selected && active) {
+        setEmployee(selected)
+        getCurrentEmploymentTerms(selected.id).then(setTerms).catch(() => undefined)
+        if (mode === 'employer') setCurrentEmployeeId(selected.id)
       }
-
-      const url = await uploadSignature(effectiveEmployeeId, currentYear, signMonth, dataUrl)
-      await sign(signMonth, url, user.uid)
-      setSuccessMessage(t('payments.signatureSaved'))
-      setSignMonth(null)
-    } catch (error) {
-      console.error('Error saving signature:', error)
-      setErrorMessage(t('common.error'))
     }
+    loadEmployee().catch(() => active && setError(t('common.error')))
+    return () => { active = false }
+  }, [currentEmployeeId, mode, setCurrentEmployeeId, t, user])
+
+  useEffect(() => {
+    if (!employee) return
+    setLoading(true)
+    getPaymentRecords(employee.id, year)
+      .then(setRecords)
+      .catch(() => setError(t('common.error')))
+      .finally(() => setLoading(false))
+  }, [employee, t, year])
+
+  const monthRecords = useMemo(() => records.filter((record) => record.month === month && !record.deleted), [month, records])
+  const totalPaid = monthRecords.reduce((sum, record) => sum + record.amount, 0)
+  const totalDue = terms?.monthlySalary ?? employee?.baseSalary ?? 0
+  const status = calculatePaymentStatus(totalDue, totalPaid, totalDue > 0)
+
+  async function saveMovement(data: MovementData) {
+    if (!employee || !user) return
+    if (editing) {
+      await updatePaymentRecord(employee.id, editing.id, data, user.uid, user.displayName)
+    } else {
+      await createPaymentRecord({ ...data, caregiverId: employee.id, employerId: employee.employerId, month, year, createdBy: user.uid, updatedBy: user.uid }, user.displayName)
+    }
+    setRecords(await getPaymentRecords(employee.id, year))
   }
 
-  function handleAttachClick(month: number) {
-    if (mode === 'employee') return
-    setAttachMonth(month)
-    fileInputRef.current?.click()
+  async function showHistory(record: PaymentRecord) {
+    if (!employee) return
+    setHistory(await getPaymentAudit(employee.id, record.id))
+    setHistoryOpen(true)
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !attachMonth || !effectiveEmployeeId || mode === 'employee') return
-    const attachment = await uploadFile(
-      `attachments/${effectiveEmployeeId}/${currentYear}/${attachMonth}`,
-      file,
-      user?.uid ?? effectiveEmployeeId
-    )
-    await addAttachment(attachMonth, attachment)
-    e.target.value = ''
-    setAttachMonth(null)
+  async function remove(record: PaymentRecord) {
+    if (!employee || !user || !window.confirm(t('payments.confirmDelete'))) return
+    await softDeletePayment(employee.id, record.id, user.uid, user.displayName)
+    setRecords((current) => current.filter((item) => item.id !== record.id))
   }
 
-  if (!effectiveEmployeeId) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <p className="text-lg">{mode === 'employee' ? t('payments.noPaymentsToShow') : t('employees.noEmployees')}</p>
-      </div>
-    )
+  function shiftMonth(delta: number) {
+    const next = month + delta
+    if (next < 1) { setMonth(12); setYear(year - 1) }
+    else if (next > 12) { setMonth(1); setYear(year + 1) }
+    else setMonth(next)
   }
+
+  if (!employee) return <div className="card text-center py-12"><p className="text-gray-600">{t('payments.noActiveCaregiver')}</p><button className="btn-primary mt-4" onClick={() => window.location.assign('/employees')}>{t('payments.manageCaregivers')}</button></div>
 
   return (
-    <div className="flex flex-col gap-6 pb-20 sm:pb-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {mode === 'employee' ? t('payments.myPaymentsTitle') : t('payments.title')}
-        </h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setCurrentYear(currentYear - 1)} className="btn-secondary !px-2 !py-2">
-            <ChevronRight size={18} />
-          </button>
-          <span className="font-semibold text-gray-800 w-16 text-center">{currentYear}</span>
-          <button onClick={() => setCurrentYear(currentYear + 1)} className="btn-secondary !px-2 !py-2">
-            <ChevronLeft size={18} />
-          </button>
-        </div>
+    <div className="flex flex-col gap-5 pb-20 sm:pb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="text-sm text-gray-500">{mode === 'employee' ? t('payments.myPaymentsTitle') : t('payments.tracking')}</p><h1 className="text-2xl font-bold text-gray-900">{mode === 'employee' ? employee.fullName : `${t('payments.tracking')} – ${employee.fullName}`}</h1></div>
+        {mode === 'employer' && <button className="btn-primary flex items-center gap-2" onClick={() => { setEditing(null); setModalOpen(true) }}><Plus size={18} />{t('payments.addPayment')}</button>}
       </div>
-
-      {successMessage && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          {successMessage}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">
-          {errorMessage}
-        </div>
-      )}
-
-      {mode === 'employer' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard label={t('dashboard.annualGross')} value={summary.annualGrossTotal} color="blue" isCurrency />
-          <KpiCard label={t('dashboard.annualPaid')} value={summary.annualTotalPaid} color="green" isCurrency />
-          <KpiCard label={t('dashboard.annualBalance')} value={summary.annualBalanceDue} color={summary.annualBalanceDue > 0 ? 'red' : 'green'} isCurrency />
-          <KpiCard label={t('dashboard.monthsPaid')} value={`${summary.monthsPaid}/12`} color="gray" />
-        </div>
-      )}
-
-      {mode === 'employer' ? (
-        <>
-          <div className="desktop-table card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-gray-500 text-xs">
-                  {[
-                    t('payments.month'),
-                    t('payments.baseSalary'),
-                    t('payments.pocketMoney'),
-                    t('payments.shabbat'),
-                    t('payments.vacation'),
-                    t('payments.holiday'),
-                    t('payments.grossTotal'),
-                    t('payments.cash'),
-                    t('payments.payslip'),
-                    t('payments.bankTransfer'),
-                    t('payments.totalPaid'),
-                    t('payments.balance'),
-                    t('payments.status'),
-                    t('payments.signatureStatus'),
-                    '',
-                  ].map((h) => (
-                    <th key={h} className="text-start py-2 px-2 font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {MONTHS.map((month) => {
-                  const payment = getPaymentByMonth(month)
-                  const signed = isPaymentSigned(payment)
-
-                  return (
-                    <tr key={month} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="py-2 px-2 font-medium">{t(`months.${month}`)}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.baseSalary) : '—'}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.pocketMoney) : '—'}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.shabbatAmount) : '—'}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.vacationAmount) : '—'}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.holidayAmount) : '—'}</td>
-                      <td className="py-2 px-2 font-semibold">{payment ? formatCurrency(payment.grossTotal) : '—'}</td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.cashPaid) : '—'}</td>
-                      <td className="py-2 px-2">
-                        {payment ? (
-                          <span>
-                            {formatCurrency(payment.payslipPaid)}
-                            {!payment.hasPayslip && <span className="text-warning-500 ms-1 text-xs">✗</span>}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td className="py-2 px-2">{payment ? formatCurrency(payment.bankTransferPaid) : '—'}</td>
-                      <td className="py-2 px-2 text-green-700 font-medium">{payment ? formatCurrency(payment.totalPaid) : '—'}</td>
-                      <td className="py-2 px-2 font-medium" style={{ color: payment?.balanceDue ? '#dc2626' : '#16a34a' }}>
-                        {payment ? formatCurrency(payment.balanceDue) : '—'}
-                      </td>
-                      <td className="py-2 px-2">
-                        <StatusBadge status={payment?.paymentStatus ?? 'empty'} size="sm" />
-                      </td>
-                      <td className="py-2 px-2">
-                        {payment?.grossTotal ? (
-                          <div className="flex flex-col gap-1 text-xs">
-                            <span className={signed ? 'text-blue-700' : 'text-gray-500'}>
-                              {signed ? t('payments.signedStatus') : t('payments.notSignedStatus')}
-                            </span>
-                            {signed ? (
-                              <button onClick={() => setViewSigMonth(month)} className="text-blue-700 underline text-start">
-                                {t('common.view')}
-                              </button>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </div>
-                        ) : '—'}
-                      </td>
-                      <td className="py-2 px-2">
-                        <button onClick={() => setEditMonth(month)} className="text-primary-600 hover:text-primary-800 text-xs underline">
-                          {t('common.edit')}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mobile-cards flex flex-col gap-3">
-            {loading ? (
-              <div className="text-center text-gray-400 py-8">{t('common.loading')}</div>
-            ) : (
-              MONTHS.map((month) => (
-                <MonthCard
-                  key={month}
-                  month={month}
-                  payment={getPaymentByMonth(month)}
-                  onEdit={() => setEditMonth(month)}
-                  onAttach={() => handleAttachClick(month)}
-                  onViewSignature={() => setViewSigMonth(month)}
-                />
-              ))
-            )}
-          </div>
-        </>
-      ) : loading ? (
-        <div className="text-center text-gray-400 py-8">{t('common.loading')}</div>
-      ) : employeePayments.length === 0 ? (
-        <div className="card text-center py-12 text-gray-500">
-          {t('payments.noPaymentsToShow')}
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {employeePayments.map((payment) => {
-            const signed = isPaymentSigned(payment)
-
-            return (
-              <div key={payment.id} className="card flex flex-col gap-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{t(`months.${payment.month}`)}</h2>
-                    <p className="text-sm text-gray-500">{payment.paymentDate || '—'}</p>
-                  </div>
-                  <div className="rounded-2xl bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-800">
-                    {formatCurrency(payment.totalPaid || payment.grossTotal)}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                    <p className="text-xs text-gray-500">{t('payments.month')}</p>
-                    <p className="mt-1 font-medium text-gray-900">{t(`months.${payment.month}`)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                    <p className="text-xs text-gray-500">{t('payments.totalPaid')}</p>
-                    <p className="mt-1 font-medium text-gray-900">{formatCurrency(payment.totalPaid || payment.grossTotal)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                    <p className="text-xs text-gray-500">{t('payments.paymentDate')}</p>
-                    <p className="mt-1 font-medium text-gray-900">{payment.paymentDate || '—'}</p>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                    <p className="text-xs text-gray-500">{t('payments.signatureStatus')}</p>
-                    <p className={`mt-1 font-medium ${signed ? 'text-blue-700' : 'text-gray-700'}`}>
-                      {signed ? t('payments.signedStatus') : t('payments.notSignedStatus')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setViewMonth(payment.month)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-800 hover:bg-primary-100"
-                  >
-                    <Eye size={16} />
-                    {t('common.view')}
-                  </button>
-                  {!signed && (
-                    <button
-                      type="button"
-                      onClick={() => setSignMonth(payment.month)}
-                      className="btn-primary"
-                    >
-                      {t('payments.signMonth')}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {mode === 'employer' && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      )}
-
-      {editMonth && (
-        <PaymentModal
-          open={!!editMonth}
-          onClose={() => setEditMonth(null)}
-          onSave={handleSavePayment}
-          month={editMonth}
-          year={currentYear}
-          existing={editPayment}
-          defaults={DEFAULT_SETTINGS}
-        />
-      )}
-
-      {viewMonth && viewPayment && (
-        <PaymentModal
-          open={!!viewMonth}
-          onClose={() => setViewMonth(null)}
-          onSave={handleSavePayment}
-          month={viewMonth}
-          year={currentYear}
-          existing={viewPayment}
-          defaults={DEFAULT_SETTINGS}
-          readOnly
-        />
-      )}
-
-      {signMonth && (
-        <SignatureModal
-          open={!!signMonth}
-          onClose={() => setSignMonth(null)}
-          onSave={handleSignSave}
-        />
-      )}
-
-      {viewSigMonth && (
-        <SignatureModal
-          open={!!viewSigMonth}
-          onClose={() => setViewSigMonth(null)}
-          onSave={() => {}}
-          existingUrl={viewSigPayment?.employeeSignatureUrl}
-        />
-      )}
+      <div className="card flex items-center justify-between gap-2"><button className="btn-secondary !px-3" onClick={() => shiftMonth(-1)}><ChevronRight size={18} /></button><div className="text-center"><p className="font-bold text-lg">{t(`months.${month}`)} {year}</p><p className="text-sm text-gray-500">{formatIsraeliDate(`${year}-${String(month).padStart(2, '0')}-01`)}</p></div><button className="btn-secondary !px-3" onClick={() => shiftMonth(1)}><ChevronLeft size={18} /></button></div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><div className="card"><p className="text-xs text-gray-500">{t('payments.monthlySalary')}</p><p className="mt-1 text-xl font-bold">{formatCurrency(employee.baseSalary)}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.totalPaid')}</p><p className="mt-1 text-xl font-bold text-success-700">{formatCurrency(totalPaid)}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.remaining')}</p><p className="mt-1 text-xl font-bold">{formatCurrency(Math.max(0, totalDue - totalPaid))}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.status')}</p><div className="mt-2"><StatusBadge status={status} /></div></div></div>
+      {error && <p className="rounded-xl bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
+      <section className="flex flex-col gap-3"><div className="flex items-center justify-between"><h2 className="text-lg font-bold">{t('payments.movements')}</h2>{mode === 'employer' && <button className="text-sm text-primary-700" onClick={() => { setEditing(null); setModalOpen(true) }}>{t('payments.addPayment')}</button>}</div>{loading ? <p className="text-gray-500">{t('common.loading')}</p> : monthRecords.length === 0 ? <div className="card text-center text-gray-500">{t('payments.noPaymentsToShow')}</div> : monthRecords.map((record) => <div key={record.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{formatIsraeliDate(record.paymentDate)} · {t(`payments.categories.${record.category}`)}</p><p className="text-sm text-gray-500">{t(`payments.methods.${record.paymentMethod}`)}{record.bankReference ? ` · ${t('payments.bankReference')}: ${record.bankReference}` : ''}</p>{record.note && <p className="text-sm text-gray-500">{record.note}</p>}</div><div className="flex items-center justify-between gap-3"><strong className="text-lg">{formatCurrency(record.amount)}</strong>{mode === 'employer' && <div className="flex gap-1"><button className="btn-secondary !p-2" onClick={() => { setEditing(record); setModalOpen(true) }}><Pencil size={16} /></button><button className="btn-secondary !p-2" onClick={() => showHistory(record)}><History size={16} /></button><button className="btn-secondary !p-2 text-danger-700" onClick={() => remove(record)}><Trash2 size={16} /></button></div>}</div></div>)}</section>
+      {mode === 'employee' && <section className="card"><h2 className="font-bold mb-3">{t('payments.paymentHistory')}</h2>{records.filter((record) => !record.deleted).map((record) => <div key={record.id} className="flex justify-between border-b py-3 last:border-0"><span>{formatIsraeliDate(record.paymentDate)} · {t(`payments.categories.${record.category}`)}</span><strong>{formatCurrency(record.amount)}</strong></div>)}</section>}
+      {mode === 'employee' && <section className="card"><h2 className="font-bold mb-3">{t('payments.currentTerms')}</h2><div className="grid grid-cols-2 gap-3 text-sm"><div><p className="text-gray-500">{t('payments.monthlySalary')}</p><strong>{formatCurrency(terms?.monthlySalary ?? employee.baseSalary)}</strong></div><div><p className="text-gray-500">{t('payments.employmentStart')}</p><strong>{formatIsraeliDate(terms?.employmentStartDate ?? employee.startDate)}</strong></div>{terms?.paymentDay && <div><p className="text-gray-500">{t('payments.paymentDay')}</p><strong>{terms.paymentDay}</strong></div>}{terms?.weeklyRestDay && <div><p className="text-gray-500">{t('payments.restDay')}</p><strong>{terms.weeklyRestDay}</strong></div>}</div></section>}
+      <PaymentMovementModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={saveMovement} existing={editing} year={year} month={month} />
+      {historyOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setHistoryOpen(false)}><div className="card w-full max-w-lg max-h-[80vh] overflow-auto" onClick={(event) => event.stopPropagation()}><div className="flex justify-between"><h2 className="text-lg font-bold">{t('payments.history')}</h2><button onClick={() => setHistoryOpen(false)}>×</button></div>{history.map((entry) => <div key={entry.id} className="border-s-2 border-primary-300 ps-3 py-3 mt-3"><p className="font-semibold">{t(`payments.audit.${entry.action}`)}</p><p className="text-xs text-gray-500">{formatDateTime(entry.timestamp)} · {entry.performedByName}</p>{entry.changedFields?.map((field) => <p key={field} className="text-sm">{field}: {String(entry.before?.[field] ?? '—')} → {String(entry.after?.[field] ?? '—')}</p>)}</div>)}</div></div>}
     </div>
   )
 }

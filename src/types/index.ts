@@ -108,6 +108,72 @@ export interface MonthlyPayment {
   updatedAt: string
 }
 
+export type PaymentMethod = 'cash' | 'bankTransfer'
+export type PaymentCategory =
+  | 'monthlySalary'
+  | 'holiday'
+  | 'vacation'
+  | 'sickLeave'
+  | 'bonus'
+  | 'advance'
+  | 'reimbursement'
+  | 'other'
+
+export interface PaymentRecord {
+  id: string
+  caregiverId: string
+  employerId: string
+  paymentDate: string
+  month: number
+  year: number
+  category: PaymentCategory
+  amount: number
+  paymentMethod: PaymentMethod
+  bankReference?: string
+  note?: string
+  deleted?: boolean
+  deletedAt?: string
+  deletedBy?: string
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export type PaymentAuditAction = 'created' | 'updated' | 'deleted' | 'restored' | 'statusChanged'
+
+export interface PaymentAuditEntry {
+  id: string
+  paymentId: string
+  caregiverId: string
+  action: PaymentAuditAction
+  performedBy: string
+  performedByName: string
+  timestamp: string
+  before?: Record<string, unknown>
+  after?: Record<string, unknown>
+  changedFields?: string[]
+}
+
+export interface EmploymentTerms {
+  id: string
+  caregiverId: string
+  employerId: string
+  monthlySalary: number
+  employmentStartDate: string
+  paymentDay?: number
+  weeklyRestDay?: string
+  holidayEntitlement?: string
+  vacationTerms?: string
+  sickLeaveTerms?: string
+  notes?: string
+  effectiveFrom: string
+  effectiveTo?: string
+  active: boolean
+  createdAt: string
+  createdBy: string
+}
+
 // ─── Pension Payment ──────────────────────────────────────────────────────────
 
 export interface PensionPayment {
