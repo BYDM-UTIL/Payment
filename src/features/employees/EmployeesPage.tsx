@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Controller, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useAppStore } from '@/store/useAppStore'
-import { getEmployees, createEmployee, updateEmployee } from '@/services/firebase/firestore.service'
-import { Modal } from '@/components/Modal'
+import { createEmployee, getEmployees, updateEmployee } from '@/services/firebase/firestore.service'
+import {
+  createCaregiverAuthAccount,
+  createUserProfile,
+  createUsernameMapping,
+  updateUserProfile,
+} from '@/services/firebase/auth.service'
 import { FormField, Input, Textarea } from '@/components/FormField'
-import { employeeSchema } from '@/utils/validation'
+import { Modal } from '@/components/Modal'
 import type { Employee } from '@/types'
-import type { z } from 'zod'
 import { Plus, Pencil, UserCheck, UserX } from 'lucide-react'
 
-type EmployeeFormData = z.infer<typeof employeeSchema>
-
-const defaultEmployeeValues: EmployeeFormData = {
+const DEFAULT_VALUES = {
   fullName: '',
   startDate: '',
   baseSalary: 6400,
@@ -24,297 +24,177 @@ const defaultEmployeeValues: EmployeeFormData = {
   partialDayRate: 256,
   pensionRate: 12.5,
   notes: '',
+  active: true,
 }
+
+type FormValues = typeof DEFAULT_VALUES
 
 export function EmployeesPage() {
   const { t } = useTranslation()
   const { user, currentEmployeeId, setCurrentEmployeeId } = useAppStore()
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState<FormValues>(DEFAULT_VALUES)
+  const [username, setUsername] = useState('')
+  const [initialPassword, setInitialPassword] = useState('')
+  const [preferredLanguage, setPreferredLanguage] = useState<'he' | 'en' | 'ru'>('he')
+  const [editing, setEditing] = useState<Employee | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
-  const [submitError, setSubmitError] = useState('')
-
-  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } =
-    useForm<EmployeeFormData>({
-      resolver: zodResolver(employeeSchema),
-      mode: 'onChange',
-      defaultValues: defaultEmployeeValues,
-    })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
     setLoading(true)
-    getEmployees(user.uid).then((data) => {
-      setEmployees(data)
-      if (data.length > 0 && !currentEmployeeId) {
-        setCurrentEmployeeId(data[0].id)
-      }
-      setLoading(false)
-    })
-  }, [user, currentEmployeeId, setCurrentEmployeeId])
+    getEmployees(user.uid)
+      .then((data) => {
+        setEmployees(data)
+        if (data.length && !currentEmployeeId) setCurrentEmployeeId(data[0].id)
+      })
+      .catch(() => setError(t('common.error')))
+      .finally(() => setLoading(false))
+  }, [currentEmployeeId, setCurrentEmployeeId, t, user])
 
-  function openAdd() {
-    setEditEmployee(null)
-    setSubmitError('')
-    reset(defaultEmployeeValues)
+  function updateField<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function openCreate() {
+    setEditing(null)
+    setForm(DEFAULT_VALUES)
+    setUsername('')
+    setInitialPassword('')
+    setPreferredLanguage('he')
+    setError('')
     setModalOpen(true)
   }
 
-  function openEdit(emp: Employee) {
-    setEditEmployee(emp)
-    setSubmitError('')
-    reset({
-      fullName: emp.fullName,
-      startDate: emp.startDate,
-      baseSalary: emp.baseSalary,
-      pocketMoney: emp.pocketMoney,
-      shabbatRate: emp.shabbatRate,
-      vacationDayRate: emp.vacationDayRate,
-      holidayRate: emp.holidayRate,
-      partialDayRate: emp.partialDayRate,
-      pensionRate: emp.pensionRate,
-      notes: emp.notes ?? '',
+  function openEdit(employee: Employee) {
+    setEditing(employee)
+    setForm({
+      fullName: employee.fullName,
+      startDate: employee.startDate,
+      baseSalary: employee.baseSalary,
+      pocketMoney: employee.pocketMoney,
+      shabbatRate: employee.shabbatRate,
+      vacationDayRate: employee.vacationDayRate,
+      holidayRate: employee.holidayRate,
+      partialDayRate: employee.partialDayRate,
+      pensionRate: employee.pensionRate,
+      notes: employee.notes ?? '',
+      active: employee.active,
     })
+    setError('')
     setModalOpen(true)
   }
 
-  async function onSubmit(data: EmployeeFormData) {
-    setSubmitError('')
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!user || !form.fullName.trim() || !form.startDate) return
+    setSaving(true)
+    setError('')
     try {
-      if (!user) {
-        setSubmitError(t('common.error'))
-        return
-      }
-      
-      if (editEmployee) {
-        await updateEmployee(editEmployee.id, { ...data, updatedAt: new Date().toISOString() })
-        setEmployees((prev) => prev.map((e) => e.id === editEmployee.id ? { ...e, ...data } : e))
+      if (editing) {
+        await updateEmployee(editing.id, form)
+        if (editing.userId) await updateUserProfile(editing.userId, { active: form.active })
+        setEmployees((current) => current.map((item) => item.id === editing.id ? { ...item, ...form } : item))
       } else {
-        const id = await createEmployee({ ...data, employerId: user.uid, active: true })
-        const newEmp: Employee = {
+        if (!username.trim() || initialPassword.length < 6) {
+          throw new Error('Username and an initial password of at least 6 characters are required.')
+        }
+        const account = await createCaregiverAuthAccount(username, initialPassword)
+        await createUsernameMapping(username, account.localId, 'caregiver')
+        await createUserProfile(account.localId, {
+          email: `${username.trim().toLowerCase()}@worker.payment.local`,
+          username: username.trim(),
+          usernameNormalized: username.trim().toLowerCase(),
+          displayName: form.fullName.trim(),
+          role: 'caregiver',
+          employeeProfileCompleted: true,
+          preferredLanguage,
+          defaultLanguage: preferredLanguage,
+          active: true,
+          createdAt: new Date().toISOString(),
+        })
+        const id = await createEmployee({ ...form, employerId: user.uid, userId: account.localId, active: true })
+        await updateUserProfile(account.localId, { employeeId: id })
+        const employee: Employee = {
           id,
           employerId: user.uid,
+          userId: account.localId,
+          ...form,
           active: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          ...data,
         }
-        setEmployees((prev) => [...prev, newEmp])
+        setEmployees((current) => [...current, employee])
         setCurrentEmployeeId(id)
       }
       setModalOpen(false)
-      reset(defaultEmployeeValues)
-    } catch (error) {
-      console.error('Error saving employee:', error)
-      setSubmitError(error instanceof Error ? error.message : t('common.error'))
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : t('common.error'))
+    } finally {
+      setSaving(false)
     }
   }
+
+  const numericFields: Array<{ key: keyof FormValues; label: string }> = [
+    { key: 'baseSalary', label: t('employees.baseSalary') },
+    { key: 'pocketMoney', label: t('employees.pocketMoney') },
+    { key: 'shabbatRate', label: t('employees.shabbatRate') },
+    { key: 'vacationDayRate', label: t('employees.vacationDayRate') },
+    { key: 'holidayRate', label: t('employees.holidayRate') },
+    { key: 'partialDayRate', label: t('employees.partialDayRate') },
+    { key: 'pensionRate', label: t('employees.pensionRate') },
+  ]
 
   return (
     <div className="flex flex-col gap-6 pb-20 sm:pb-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{t('employees.title')}</h1>
-        <button onClick={openAdd} className="btn-primary flex items-center gap-2">
-          <Plus size={18} />
-          {t('employees.add')}
-        </button>
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2"><Plus size={18} />{t('employees.add')}</button>
       </div>
 
-      {loading ? (
-        <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>
-      ) : employees.length === 0 ? (
-        <div className="card text-center py-12 text-gray-400">
-          <p className="text-lg mb-4">{t('employees.noEmployees')}</p>
-          <button onClick={openAdd} className="btn-primary">{t('employees.add')}</button>
-        </div>
-      ) : (
+      {loading ? <p className="text-center text-gray-400 py-8">{t('common.loading')}</p> : (
         <div className="flex flex-col gap-3">
-          {employees.map((emp) => (
-            <div
-              key={emp.id}
-              className={`card flex items-start sm:items-center justify-between gap-3 cursor-pointer transition-all ${
-                currentEmployeeId === emp.id ? 'border-primary-300 bg-primary-50' : ''
-              }`}
-              onClick={() => setCurrentEmployeeId(emp.id)}
-            >
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-800">{emp.fullName}</span>
-                  {emp.active ? (
-                    <UserCheck size={16} className="text-success-500" />
-                  ) : (
-                    <UserX size={16} className="text-gray-400" />
-                  )}
-                  {currentEmployeeId === emp.id && (
-                    <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">פעיל</span>
-                  )}
+          {employees.length === 0 && <div className="card text-center text-gray-500">{t('employees.noEmployees')}</div>}
+          {employees.map((employee) => (
+            <div key={employee.id} className={`card flex items-center justify-between gap-3 ${currentEmployeeId === employee.id ? 'border-primary-300 bg-primary-50' : ''}`} onClick={() => setCurrentEmployeeId(employee.id)}>
+              <div>
+                <div className="flex items-center gap-2 font-semibold">
+                  {employee.fullName}
+                  {employee.active ? <UserCheck size={16} className="text-success-500" /> : <UserX size={16} className="text-gray-400" />}
                 </div>
-                <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                  <span>{t('employees.startDate')}: {emp.startDate}</span>
-                  <span>{t('employees.baseSalary')}: ₪{emp.baseSalary.toLocaleString()}</span>
-                  <span>{t('employees.pensionRate')}: {emp.pensionRate}%</span>
-                </div>
-                {emp.notes && <p className="text-xs text-gray-400">{emp.notes}</p>}
+                <p className="text-xs text-gray-500">{t('employees.startDate')}: {employee.startDate}</p>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); openEdit(emp) }}
-                className="btn-secondary !px-3 !py-2 shrink-0"
-              >
-                <Pencil size={14} />
-              </button>
+              <button className="btn-secondary !px-3 !py-2" onClick={(event) => { event.stopPropagation(); openEdit(employee) }}><Pencil size={14} /></button>
             </div>
           ))}
         </div>
       )}
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editEmployee ? t('employees.edit') : t('employees.add')}
-        size="lg"
-      >
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          {submitError && (
-            <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{submitError}</p>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('employees.edit') : t('employees.add')} size="lg">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{error}</p>}
+          {!editing && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label={t('auth.username')} required><Input value={username} onChange={(event) => setUsername(event.target.value)} autoCapitalize="none" required /></FormField>
+              <FormField label={t('auth.initialPassword')} required><Input type="password" value={initialPassword} onChange={(event) => setInitialPassword(event.target.value)} minLength={6} autoComplete="new-password" required /></FormField>
+              <FormField label={t('auth.preferredLanguage')}>
+                <select className="input" value={preferredLanguage} onChange={(event) => setPreferredLanguage(event.target.value as 'he' | 'en' | 'ru')}>
+                  <option value="he">עברית</option><option value="en">English</option><option value="ru">Русский</option>
+                </select>
+              </FormField>
+            </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label={t('employees.fullName')} required error={errors.fullName?.message}>
-              <Controller
-                name="fullName"
-                control={control}
-                render={({ field }) => <Input type="text" {...field} error={!!errors.fullName} />}
-              />
-            </FormField>
-            <FormField label={t('employees.startDate')} required error={errors.startDate?.message}>
-              <Controller
-                name="startDate"
-                control={control}
-                render={({ field }) => <Input type="date" {...field} error={!!errors.startDate} />}
-              />
-            </FormField>
-            <FormField label={t('employees.baseSalary')} required error={errors.baseSalary?.message}>
-              <Controller
-                name="baseSalary"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.baseSalary}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.pocketMoney')} error={errors.pocketMoney?.message}>
-              <Controller
-                name="pocketMoney"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.pocketMoney}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.shabbatRate')} error={errors.shabbatRate?.message}>
-              <Controller
-                name="shabbatRate"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.shabbatRate}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.vacationDayRate')} error={errors.vacationDayRate?.message}>
-              <Controller
-                name="vacationDayRate"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.vacationDayRate}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.holidayRate')} error={errors.holidayRate?.message}>
-              <Controller
-                name="holidayRate"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.holidayRate}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.partialDayRate')} error={errors.partialDayRate?.message}>
-              <Controller
-                name="partialDayRate"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.partialDayRate}
-                  />
-                )}
-              />
-            </FormField>
-            <FormField label={t('employees.pensionRate')} error={errors.pensionRate?.message}>
-              <Controller
-                name="pensionRate"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    type="number"
-                    step="0.1"
-                    {...field}
-                    value={field.value}
-                    onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    error={!!errors.pensionRate}
-                  />
-                )}
-              />
-            </FormField>
+            <FormField label={t('employees.fullName')} required><Input value={form.fullName} onChange={(event) => updateField('fullName', event.target.value)} required /></FormField>
+            <FormField label={t('employees.startDate')} required><Input type="date" value={form.startDate} onChange={(event) => updateField('startDate', event.target.value)} required /></FormField>
+            {numericFields.map(({ key, label }) => <FormField key={key} label={label}><Input type="number" step="0.1" value={form[key] as number} onChange={(event) => updateField(key, Number(event.target.value))} /></FormField>)}
           </div>
-          <FormField label={t('employees.notes')}>
-            <Controller
-              name="notes"
-              control={control}
-              render={({ field }) => <Textarea {...field} value={field.value ?? ''} />}
-            />
-          </FormField>
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary flex-1" onClick={() => setModalOpen(false)}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn-primary flex-1" disabled={isSubmitting}>
-              {isSubmitting ? t('common.loading') : t('common.save')}
-            </button>
-          </div>
+          {editing && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => updateField('active', event.target.checked)} />{t('auth.activeAccount')}</label>}
+          <FormField label={t('employees.notes')}><Textarea value={form.notes} onChange={(event) => updateField('notes', event.target.value)} /></FormField>
+          <div className="flex gap-2"><button type="button" className="btn-secondary flex-1" onClick={() => setModalOpen(false)}>{t('common.cancel')}</button><button type="submit" className="btn-primary flex-1" disabled={saving}>{saving ? t('common.loading') : t('common.save')}</button></div>
         </form>
       </Modal>
     </div>

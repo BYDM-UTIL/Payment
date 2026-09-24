@@ -18,7 +18,7 @@ async function getUserProfileWithRetry(uid: string, retries = 5, delayMs = 250) 
 }
 
 export function useAuth() {
-  const { user, setUser, clearSession } = useAppStore()
+  const { user, setUser, clearSession, setLanguage } = useAppStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -32,13 +32,14 @@ export function useAuth() {
           const profile = await getUserProfileWithRetry(firebaseUser.uid)
           if (profile) {
             setUser(profile)
+            setLanguage(profile.preferredLanguage ?? profile.defaultLanguage)
           } else {
             const newProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'משתמש',
-              role: 'employee' as const,
-              employeeProfileCompleted: false,
+              role: 'caregiver' as const,
+              employeeProfileCompleted: true,
               defaultLanguage: 'he' as const,
               createdAt: new Date().toISOString()
             }
@@ -58,8 +59,8 @@ export function useAuth() {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'משתמש',
-            role: 'employee' as const,
-            employeeProfileCompleted: false,
+            role: 'caregiver' as const,
+            employeeProfileCompleted: true,
             defaultLanguage: 'he' as const,
             createdAt: new Date().toISOString()
           })
@@ -75,12 +76,12 @@ export function useAuth() {
       window.clearTimeout(loadingTimeout)
       unsubscribe()
     }
-  }, [clearSession, setUser])
+  }, [clearSession, setLanguage, setUser])
 
   return {
     user,
     loading,
-    isEmployer: user?.role === 'employer',
-    isEmployee: user?.role === 'employee',
+    isAdmin: user?.role === 'admin',
+    isCaregiver: user?.role === 'caregiver',
   }
 }

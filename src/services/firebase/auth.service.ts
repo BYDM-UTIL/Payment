@@ -1,43 +1,81 @@
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  updatePassword,
   type User,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from './config'
 import type { AppUser } from '@/types'
 
+export function normalizeUsername(username: string) {
+  return username.trim().normalize('NFKC').toLocaleLowerCase('en-US')
+}
+
+function internalEmailForUsername(username: string) {
+  return `${normalizeUsername(username).replace(/[^a-z0-9._-]/g, '')}@worker.payment.local`
+}
+
 function normalizeUserProfile(uid: string, data: Record<string, unknown>): AppUser {
   const rawRole = data.role
-  // Legacy roles: 'admin' -> employer, 'viewer'/anything else -> employee
-  const role: 'employer' | 'employee' =
-    rawRole === 'employer' || rawRole === 'admin' ? 'employer' : 'employee'
+  const role: 'admin' | 'caregiver' =
+    rawRole === 'admin' || rawRole === 'employer' ? 'admin' : 'caregiver'
 
   return {
     uid,
     email: typeof data.email === 'string' ? data.email : '',
+    username: typeof data.username === 'string' ? data.username : undefined,
+    usernameNormalized: typeof data.usernameNormalized === 'string' ? data.usernameNormalized : undefined,
     displayName: typeof data.displayName === 'string' ? data.displayName : 'משתמש',
     role,
     employeeId: typeof data.employeeId === 'string' ? data.employeeId : undefined,
-    employeeProfileCompleted: typeof data.employeeProfileCompleted === 'boolean' ? data.employeeProfileCompleted : false,
+    employeeProfileCompleted: typeof data.employeeProfileCompleted === 'boolean' ? data.employeeProfileCompleted : true,
+    preferredLanguage: data.preferredLanguage === 'ru' || data.preferredLanguage === 'en' ? data.preferredLanguage : 'he',
+    active: typeof data.active === 'boolean' ? data.active : true,
     defaultLanguage:
       data.defaultLanguage === 'ru' || data.defaultLanguage === 'en' ? data.defaultLanguage : 'he',
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   }
 }
 
-export async function loginWithEmail(email: string, password: string) {
-  return signInWithEmailAndPassword(auth, email, password)
+export async function loginWithUsername(username: string, password: string) {
+  const normalized = normalizeUsername(username)
+  if (!normalized) throw new Error('auth/invalid-username')
+
+  const mapping = await getDoc(doc(db, 'usernameMappings', normalized))
+  if (!mapping.exists()) throw new Error('auth/invalid-credential')
+  const data = mapping.data()
+  if (data.active === false) throw new Error('auth/user-disabled')
+  const internalEmail = typeof data.internalEmail === 'string'
+    ? data.internalEmail
+    : internalEmailForUsername(username)
+  return signInWithEmailAndPassword(auth, internalEmail, password)
 }
 
-export async function registerWithEmail(email: string, password: string) {
-  return createUserWithEmailAndPassword(auth, email, password)
+export async function createCaregiverAuthAccount(username: string, password: string) {
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${import.meta.env.VITE_FIREBASE_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: internalEmailForUsername(username), password, returnSecureToken: false }),
+    }
+  )
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(typeof payload?.error?.message === 'string' ? payload.error.message : 'auth/create-failed')
+  }
+  return response.json() as Promise<{ localId: string }>
 }
 
 export async function logout() {
   return signOut(auth)
+}
+
+export async function changeOwnPassword(password: string) {
+  if (!auth.currentUser) throw new Error('auth/not-signed-in')
+  await updatePassword(auth.currentUser, password)
 }
 
 export function onAuthChange(callback: (user: User | null) => void) {
@@ -50,15 +88,25 @@ export async function getUserProfile(uid: string): Promise<AppUser | null> {
   return normalizeUserProfile(uid, snap.data())
 }
 
+export async function createUsernameMapping(
+  username: string,
+  uid: string,
+  role: 'admin' | 'caregiver',
+  active = true,
+) {
+  const usernameNormalized = normalizeUsername(username)
+  await setDoc(doc(db, 'usernameMappings', usernameNormalized), {
+    username,
+    usernameNormalized,
+    uid,
+    role,
+    active,
+    internalEmail: internalEmailForUsername(username),
+  })
+}
+
 export async function createUserProfile(uid: string, data: Omit<AppUser, 'uid'>) {
-  console.log('[Auth Service] Creating user profile:', { uid, role: data.role, email: data.email })
-  try {
-    await setDoc(doc(db, 'users', uid), data)
-    console.log('[Auth Service] User profile created successfully')
-  } catch (error) {
-    console.error('[Auth Service] Error creating user profile:', error)
-    throw error
-  }
+  await setDoc(doc(db, 'users', uid), data)
 }
 
 export async function updateUserProfile(uid: string, data: Partial<Omit<AppUser, 'uid'>>) {

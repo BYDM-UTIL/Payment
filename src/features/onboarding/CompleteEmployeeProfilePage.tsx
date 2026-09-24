@@ -76,7 +76,7 @@ export function CompleteEmployeeProfilePage() {
     try {
       if (!user) throw new Error('User not found')
 
-      console.log('[Profile Page] User object:', { uid: user.uid, role: user.role, email: user.email })
+      console.log('[Profile Page] User object:', { uid: user.uid, role: user.role })
 
       // Create employee record
       const fullName = `${data.firstName} ${data.lastName}`

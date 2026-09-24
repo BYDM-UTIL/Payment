@@ -20,7 +20,7 @@ export async function seedInitial2026Data(context: SeedContext) {
   batch.set(doc(db, 'users', context.userId), {
     displayName: 'Demo Workspace',
     email: '',
-    role: 'employer',
+    role: 'admin',
     createdAt: now,
     defaultLanguage: 'he',
   }, { merge: true })

@@ -30,6 +30,7 @@ const employerNavItems = [
 
 const employeeNavItems = [
   { to: '/my-payments', labelKey: 'nav.myPayments', Icon: CreditCard },
+  { to: '/profile', labelKey: 'nav.profile', Icon: Settings },
 ]
 
 export function Layout() {
@@ -38,7 +39,7 @@ export function Layout() {
   const { user, clearSession } = useAppStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
-  const navItems = user?.role === 'employee' ? employeeNavItems : employerNavItems
+  const navItems = user?.role === 'caregiver' ? employeeNavItems : employerNavItems
 
   async function handleLogout() {
     setLoggingOut(true)

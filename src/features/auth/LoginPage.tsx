@@ -2,190 +2,33 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
-import {
-  loginWithEmail,
-  registerWithEmail,
-  createUserProfile,
-  getUserProfile,
-  updateUserProfile,
-} from '@/services/firebase/auth.service'
-import { createEmployee } from '@/services/firebase/firestore.service'
+import { loginWithUsername } from '@/services/firebase/auth.service'
 import { Input, FormField } from '@/components/FormField'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
-
-type AuthMode = 'login' | 'register'
-
-const DEFAULT_SALARY_VALUES = {
-  baseSalary: 6400,
-  pocketMoney: 400,
-  shabbatRate: 426,
-  vacationDayRate: 250,
-  holidayRate: 426,
-  partialDayRate: 256,
-  pensionRate: 12.5,
-}
-
-function getAuthErrorMessage() {
-  return 'שגיאה בביצוע הפעולה. בדוק את הפרטים ונסה שוב.'
-}
 
 export function LoginPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<AuthMode>('login')
-  const [displayName, setDisplayName] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function resetAuthError() {
-    if (error) setError('')
-  }
-
-  function validateRegisterForm() {
-    if (!displayName.trim()) return 'שם מלא הוא שדה חובה.'
-    if (password.length < 6) return 'הסיסמה חייבת להכיל לפחות 6 תווים.'
-    if (password !== confirmPassword) return 'אימות הסיסמה לא תואם.'
-    return null
-  }
-
-  async function handleLoginSubmit() {
-    try {
-      console.log('Starting login for:', email)
-      const result = await loginWithEmail(email, password)
-      console.log('Firebase login successful:', result.user.uid)
-      
-      const uid = result.user.uid
-      const existingProfile = await getUserProfile(uid)
-      console.log('Existing profile:', existingProfile)
-
-      if (!existingProfile) {
-        const fallbackDisplayName = result.user.displayName || email.split('@')[0] || 'משתמש'
-        console.log('Profile missing after login, creating safe employee fallback profile')
-        await createUserProfile(uid, {
-          email: result.user.email || email,
-          displayName: fallbackDisplayName,
-          role: 'employee',
-          employeeProfileCompleted: false,
-          defaultLanguage: 'he',
-          createdAt: new Date().toISOString(),
-        })
-
-        const employeeId = await createEmployee({
-          employerId: uid,
-          userId: uid,
-          fullName: fallbackDisplayName,
-          startDate: new Date().toISOString().slice(0, 10),
-          ...DEFAULT_SALARY_VALUES,
-          active: true,
-          notes: '',
-        })
-
-        await updateUserProfile(uid, {
-          employeeId,
-          employeeProfileCompleted: false,
-        })
-
-        console.log('Employee fallback profile created')
-      }
-    } catch (error) {
-      console.error('Login error:', error)
-      throw error
-    }
-  }
-
-  async function handleRegisterSubmit() {
-    const validationError = validateRegisterForm()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    try {
-      console.log('Starting registration for:', email)
-      const result = await registerWithEmail(email, password)
-      console.log('Firebase user created:', result.user.uid)
-      
-      const uid = result.user.uid
-
-      // Self-registration always creates an employee who must complete their profile.
-      // Employer accounts are provisioned via a trusted admin action, not from this form.
-      const role = 'employee' as const
-      const profileCompleted = false
-
-      console.log('Creating user profile:', { uid, role, profileCompleted })
-      
-      await createUserProfile(uid, {
-        email: result.user.email || email,
-        displayName: displayName.trim(),
-        role,
-        employeeProfileCompleted: profileCompleted,
-        defaultLanguage: 'he',
-        createdAt: new Date().toISOString(),
-      })
-
-      const employeeId = await createEmployee({
-        employerId: uid,
-        userId: uid,
-        fullName: displayName.trim(),
-        startDate: new Date().toISOString().slice(0, 10),
-        ...DEFAULT_SALARY_VALUES,
-        active: true,
-        notes: '',
-      })
-
-      await updateUserProfile(uid, {
-        employeeId,
-        employeeProfileCompleted: false,
-      })
-      
-      console.log('User profile created successfully')
-    } catch (error) {
-      console.error('Registration error:', error)
-      throw error
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    resetAuthError()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
     setLoading(true)
-    console.log('Form submitted. Mode:', mode)
-
     try {
-      if (mode === 'login') {
-        console.log('Attempting login...')
-        await handleLoginSubmit()
+      await loginWithUsername(username, password)
+      navigate('/', { replace: true })
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : ''
+      if (message.includes('user-disabled')) {
+        setError(t('auth.accountInactive'))
+      } else if (message.includes('invalid-credential') || message.includes('INVALID_LOGIN_CREDENTIALS')) {
+        setError(t('auth.invalidCredentials'))
       } else {
-        console.log('Attempting registration...')
-        await handleRegisterSubmit()
-      }
-      console.log('Auth successful, navigating to home...')
-      navigate('/')
-    } catch (error) {
-      console.error('Auth error caught in handleSubmit:', error)
-      
-      // Better error messages
-      if (error instanceof Error) {
-        if (error.message.includes('email-already-in-use')) {
-          setError('האימייל כבר רשום במערכת. נסה להתחבר או השתמש באימייל אחר.')
-        } else if (error.message.includes('weak-password')) {
-          setError('הסיסמה חלשה מדי. השתמש לפחות 6 תווים.')
-        } else if (error.message.includes('invalid-email')) {
-          setError('כתובת אימייל לא תקינה.')
-        } else if (error.message.includes('user-disabled')) {
-          setError('חשבון זה הוסר או נחסם.')
-        } else if (error.message.includes('too-many-requests')) {
-          setError('יותר מדי ניסיונות כושלים. נסה שוב בעוד כמה דקות.')
-        } else if (error.message.includes('Permission denied')) {
-          setError('שגיאת הרשאה: בדוק את חוקי Firestore. פרטים נוספים בקונסול.')
-        } else {
-          setError(error.message || getAuthErrorMessage())
-        }
-      } else {
-        setError(getAuthErrorMessage())
+        setError(t('auth.loginError'))
       }
     } finally {
       setLoading(false)
@@ -193,108 +36,40 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[radial-gradient(circle_at_top_right,_rgba(249,115,22,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(244,63,94,0.16),_transparent_30%),linear-gradient(180deg,_#fffaf5_0%,_#fff7ed_100%)]">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[radial-gradient(circle_at_top_right,_rgba(249,115,22,0.22),_transparent_34%),linear-gradient(180deg,_#fffaf5_0%,_#fff7ed_100%)]">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg border border-white">
             <LogIn className="text-primary-700" size={32} />
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900">{t('app.name')}</h1>
-          <p className="text-gray-600 mt-1 text-sm">מעקב תשלומים לעובדת זרה</p>
+          <p className="text-gray-600 mt-1 text-sm">{t('auth.loginSubtitle')}</p>
         </div>
 
         <div className="card">
-          <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-            <button
-              type="button"
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${mode === 'login' ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-600'}`}
-              onClick={() => {
-                setMode('login')
-                resetAuthError()
-              }}
-            >
-              התחברות
-            </button>
-            <button
-              type="button"
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${mode === 'register' ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-600'}`}
-              onClick={() => {
-                setMode('register')
-                resetAuthError()
-              }}
-            >
-              משתמש חדש
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {mode === 'register' && (
-              <FormField label="שם מלא" required>
-                <Input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => {
-                    setDisplayName(e.target.value)
-                    resetAuthError()
-                  }}
-                  placeholder="שם משתמש"
-                  autoComplete="name"
-                  required
-                />
-              </FormField>
-            )}
-
-            <FormField label="אימייל" required>
+            <FormField label={t('auth.username')} required>
               <Input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value)
-                  resetAuthError()
-                }}
-                placeholder="your@email.com"
-                autoComplete="email"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="username"
+                autoCapitalize="none"
                 required
               />
             </FormField>
-
-            <FormField label="סיסמה" required>
+            <FormField label={t('auth.password')} required>
               <Input
                 type="password"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  resetAuthError()
-                }}
-                placeholder="••••••••"
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
                 required
               />
             </FormField>
-
-            {mode === 'register' && (
-              <>
-                <FormField label="אימות סיסמה" required>
-                  <Input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value)
-                      resetAuthError()
-                    }}
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    required
-                  />
-                </FormField>
-              </>
-            )}
-
-            {error && (
-              <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{error}</p>
-            )}
+            {error && <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{error}</p>}
             <button type="submit" className="btn-primary w-full mt-2" disabled={loading}>
-              {loading ? t('common.loading') : mode === 'login' ? 'כניסה למערכת' : 'יצירת משתמש חדש'}
+              {loading ? t('common.loading') : t('auth.login')}
             </button>
           </form>
         </div>

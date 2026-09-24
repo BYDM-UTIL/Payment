@@ -1,14 +1,18 @@
 // ─── Users & Auth ────────────────────────────────────────────────────────────
 
-export type UserRole = 'employer' | 'employee'
+export type UserRole = 'admin' | 'caregiver'
 
 export interface AppUser {
   uid: string
   displayName: string
   email: string
+  username?: string
+  usernameNormalized?: string
   role: UserRole
   employeeId?: string
-  employeeProfileCompleted: boolean
+  employeeProfileCompleted?: boolean
+  preferredLanguage?: 'he' | 'ru' | 'en'
+  active?: boolean
   createdAt: string
   defaultLanguage: 'he' | 'ru' | 'en'
 }
@@ -137,7 +141,7 @@ export interface Attachment {
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'sign'
-export type AuditEntityType = 'payment' | 'pension' | 'employee' | 'settings'
+export type AuditEntityType = 'payment' | 'pension' | 'employee' | 'settings' | 'caregiver'
 
 export interface AuditLog {
   id: string

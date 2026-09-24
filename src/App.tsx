@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import { useAppStore } from '@/store/useAppStore'
 import type { UserRole } from '@/types'
@@ -14,6 +15,7 @@ import { EmployeesPage } from '@/features/employees/EmployeesPage'
 import { ReportsPage } from '@/features/reports/ReportsPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { GuidePage } from '@/features/guide/GuidePage'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 
 function LoadingScreen() {
   return (
@@ -26,8 +28,13 @@ function LoadingScreen() {
   )
 }
 
+function InactiveAccountScreen() {
+  const { t } = useTranslation()
+  return <div className="min-h-screen flex items-center justify-center p-6 text-center"><p className="text-lg text-gray-700">{t('auth.accountInactive')}</p></div>
+}
+
 function getDefaultPath(role: UserRole) {
-  return role === 'employee' ? '/my-payments' : '/'
+  return role === 'caregiver' ? '/my-payments' : '/'
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -36,6 +43,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     <LoadingScreen />
   )
   if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'caregiver' && user.active === false) return <InactiveAccountScreen />
   return <>{children}</>
 }
 
@@ -59,7 +67,7 @@ function EmployeeProfileCompletionRoute({ children }: { children: React.ReactNod
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
   // If employee and profile not completed, redirect to completion page
-  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+  if (user.role === 'caregiver' && user.employeeProfileCompleted === false) {
     return <Navigate to="/complete-employee-profile" replace />
   }
   return <>{children}</>
@@ -70,7 +78,7 @@ function ProfileCompletionRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
   // Only allow incomplete employees to access this page
-  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+  if (user.role === 'caregiver' && user.employeeProfileCompleted === false) {
     return <>{children}</>
   }
   // If already completed or is employer, redirect to default path
@@ -82,10 +90,10 @@ function HomeRoute() {
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
   // If employee with incomplete profile, redirect to profile completion
-  if (user.role === 'employee' && !user.employeeProfileCompleted) {
+  if (user.role === 'caregiver' && user.employeeProfileCompleted === false) {
     return <Navigate to="/complete-employee-profile" replace />
   }
-  if (user.role === 'employee') return <Navigate to="/my-payments" replace />
+  if (user.role === 'caregiver') return <Navigate to="/my-payments" replace />
   return <DashboardPage />
 }
 
@@ -111,13 +119,14 @@ export function App() {
           }
         >
           <Route index element={<HomeRoute />} />
-          <Route path="payments" element={<RoleRoute roles={['employer']}><PaymentsPage mode="employer" /></RoleRoute>} />
-          <Route path="my-payments" element={<EmployeeProfileCompletionRoute><RoleRoute roles={['employee']}><PaymentsPage mode="employee" /></RoleRoute></EmployeeProfileCompletionRoute>} />
-          <Route path="pension" element={<RoleRoute roles={['employer']}><PensionPage /></RoleRoute>} />
-          <Route path="employees" element={<RoleRoute roles={['employer']}><EmployeesPage /></RoleRoute>} />
-          <Route path="reports" element={<RoleRoute roles={['employer']}><ReportsPage /></RoleRoute>} />
-          <Route path="settings" element={<RoleRoute roles={['employer']}><SettingsPage /></RoleRoute>} />
-          <Route path="guide" element={<RoleRoute roles={['employer']}><GuidePage /></RoleRoute>} />
+          <Route path="payments" element={<RoleRoute roles={['admin']}><PaymentsPage mode="employer" /></RoleRoute>} />
+          <Route path="my-payments" element={<EmployeeProfileCompletionRoute><RoleRoute roles={['caregiver']}><PaymentsPage mode="employee" /></RoleRoute></EmployeeProfileCompletionRoute>} />
+          <Route path="profile" element={<RoleRoute roles={['caregiver']}><ProfilePage /></RoleRoute>} />
+          <Route path="pension" element={<RoleRoute roles={['admin']}><PensionPage /></RoleRoute>} />
+          <Route path="employees" element={<RoleRoute roles={['admin']}><EmployeesPage /></RoleRoute>} />
+          <Route path="reports" element={<RoleRoute roles={['admin']}><ReportsPage /></RoleRoute>} />
+          <Route path="settings" element={<RoleRoute roles={['admin']}><SettingsPage /></RoleRoute>} />
+          <Route path="guide" element={<RoleRoute roles={['admin']}><GuidePage /></RoleRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

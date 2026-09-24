@@ -10,16 +10,16 @@ service cloud.firestore {
     // Helper: get user role from /users/{uid}. Missing profile => non-privileged.
     function userRole() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'employee')
-        : 'employee';
+        ? (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'caregiver') == 'employer' ? 'admin' : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'caregiver') == 'employee' ? 'caregiver' : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'caregiver'))
+        : 'caregiver';
     }
 
-    function isEmployer() {
-      return isAuth() && (userRole() == 'employer' || userRole() == 'admin');
+    function isAdmin() {
+      return isAuth() && userRole() == 'admin';
     }
 
-    function isEmployee() {
-      return isAuth() && (userRole() == 'employee' || userRole() == 'viewer');
+    function isCaregiver() {
+      return isAuth() && userRole() == 'caregiver';
     }
 
     function userEmployeeId() {
@@ -28,11 +28,12 @@ service cloud.firestore {
     }
 
     function isEmployeeOwner(employeeId) {
-      return isEmployee() && userEmployeeId() == employeeId;
+      return isCaregiver() && userEmployeeId() == employeeId;
     }
 
     function canReadEmployee(employeeId) {
       return isAuth() && (
+        isAdmin() ||
         isEmployeeOwner(employeeId) ||
         get(/databases/$(database)/documents/employees/$(employeeId)).data.employerId == request.auth.uid
       );
@@ -64,46 +65,51 @@ service cloud.firestore {
 
     // Users collection - allow new users to create their profile
     match /users/{userId} {
-      allow read: if isAuth() && request.auth.uid == userId;
-      allow create: if isAuth() && request.auth.uid == userId;
-      // A user may update their own profile but can never change their own role
-      // (no self-promotion to employer).
-      allow update: if isAuth() && request.auth.uid == userId
-                    && request.resource.data.role == resource.data.role;
-      allow delete: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin() || (isAuth() && request.auth.uid == userId && request.resource.data.role == 'caregiver');
+      allow update: if isAdmin() || (isAuth() && request.auth.uid == userId
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'preferredLanguage', 'defaultLanguage', 'active']));
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    match /usernameMappings/{usernameNormalized} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
     }
 
     // Employers collection
     match /employers/{employerId} {
       allow read: if isAuth() && resource.data.createdBy == request.auth.uid;
-      allow create: if isEmployer();
+      allow create: if isAdmin();
       allow update, delete: if resource.data.createdBy == request.auth.uid;
     }
 
     // Employees collection
     match /employees/{employeeId} {
       allow read: if canReadEmployee(employeeId);
-      allow create: if isAuth() && request.resource.data.employerId == request.auth.uid;
-      allow update: if isAuth()
+      allow create: if isAdmin() && request.resource.data.employerId == request.auth.uid;
+      allow update: if isAdmin()
                     && resource.data.employerId == request.auth.uid
                     && request.resource.data.employerId == resource.data.employerId;
-      allow delete: if resource.data.employerId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.employerId == request.auth.uid;
 
       // Year settings
       match /years/{year} {
         allow read: if canReadEmployee(employeeId);
-        allow write: if canReadEmployee(employeeId) && isEmployer();
+        allow write: if canReadEmployee(employeeId) && isAdmin();
 
         // Monthly payments
         match /monthlyPayments/{month} {
           allow read: if canReadEmployee(employeeId);
-          allow create: if canReadEmployee(employeeId) && isEmployer();
-          allow delete: if canReadEmployee(employeeId) && isEmployer()
+          allow create: if canReadEmployee(employeeId) && isAdmin();
+          allow delete: if canReadEmployee(employeeId) && isAdmin()
                         && resource.data.signed != true;
           // Employer may edit only while unsigned, or touch non-locked fields
           // (e.g. attachments/notes) after signing. The employee may sign once.
           allow update: if (
-                          canReadEmployee(employeeId) && isEmployer() && (
+                          canReadEmployee(employeeId) && isAdmin() && (
                             resource.data.signed != true ||
                             !request.resource.data.diff(resource.data).affectedKeys().hasAny(signedLockedKeys())
                           )
@@ -113,7 +119,7 @@ service cloud.firestore {
         // Pension payments
         match /pensionPayments/{month} {
           allow read: if canReadEmployee(employeeId);
-          allow write: if canReadEmployee(employeeId) && isEmployer();
+          allow write: if canReadEmployee(employeeId) && isAdmin();
         }
       }
 
