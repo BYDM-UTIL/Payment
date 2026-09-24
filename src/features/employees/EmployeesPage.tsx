@@ -100,7 +100,7 @@ export function EmployeesPage() {
         setEmployees((current) => current.map((item) => item.id === editing.id ? { ...item, ...form } : item))
       } else {
         if (!username.trim() || initialPassword.length < 6) {
-          throw new Error('Username and an initial password of at least 6 characters are required.')
+          throw new Error(t('auth.caregiverCredentialsRequired'))
         }
         const account = await createCaregiverAuthAccount(username, initialPassword)
         await createUsernameMapping(username, account.localId, 'caregiver')

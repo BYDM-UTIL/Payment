@@ -218,6 +218,7 @@
     "changePassword": "Change password",
     "passwordChanged": "Password changed successfully",
     "activeAccount": "Active account",
+    "caregiverCredentialsRequired": "Enter a username and an initial password of at least 6 characters",
     "register": "New User",
     "email": "Email",
     "password": "Password",

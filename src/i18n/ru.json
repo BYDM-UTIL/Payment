@@ -218,6 +218,7 @@
     "changePassword": "Изменить пароль",
     "passwordChanged": "Пароль успешно изменен",
     "activeAccount": "Активный аккаунт",
+    "caregiverCredentialsRequired": "Введите имя пользователя и начальный пароль не менее 6 символов",
     "register": "Новый пользователь",
     "email": "Электронная почта",
     "password": "Пароль",

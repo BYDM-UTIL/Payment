@@ -218,6 +218,7 @@
     "changePassword": "שינוי סיסמה",
     "passwordChanged": "הסיסמה שונתה בהצלחה",
     "activeAccount": "חשבון פעיל",
+    "caregiverCredentialsRequired": "יש להזין שם משתמש וסיסמה ראשונית בת 6 תווים לפחות",
     "register": "משתמש חדש",
     "email": "אימייל",
     "password": "סיסמה",
