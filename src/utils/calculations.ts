@@ -123,3 +123,36 @@ export function formatCurrency(amount: number, locale = 'he-IL'): string {
 export function formatNumber(amount: number): string {
   return new Intl.NumberFormat('he-IL').format(amount)
 }
+
+// ─── Shared Payment Model ─────────────────────────────────────────────────────
+
+export interface PaymentComponents {
+  monthlySalary: number
+  saturdayPayment: number
+  holidayPayment: number
+  otherPayment: number
+}
+
+export function calculatePaymentTotalDue(components: PaymentComponents): number {
+  return (
+    (components.monthlySalary || 0) +
+    (components.saturdayPayment || 0) +
+    (components.holidayPayment || 0) +
+    (components.otherPayment || 0)
+  )
+}
+
+export function calculateMoneyStatus(totalDue: number, totalPaid: number): 'paid' | 'partiallyPaid' | 'unpaid' {
+  if (totalPaid <= 0) return 'unpaid'
+  if (totalPaid >= totalDue) return 'paid'
+  return 'partiallyPaid'
+}
+
+// Single source of truth for the combined payment + signature label key.
+export function paymentStateLabelKey(paymentStatus: string, signatureStatus: string): string {
+  if (paymentStatus === 'paid' && signatureStatus === 'signed') return 'payment.state.paidAndSigned'
+  if (paymentStatus === 'paid' && signatureStatus === 'pendingSignature') return 'payment.state.paidWaitingSignature'
+  if (paymentStatus === 'partiallyPaid') return 'payment.state.partiallyPaid'
+  return 'payment.state.unpaid'
+}
+

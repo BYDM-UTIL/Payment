@@ -109,28 +109,36 @@ export interface MonthlyPayment {
 }
 
 export type PaymentMethod = 'cash' | 'bankTransfer'
-export type PaymentCategory =
-  | 'monthlySalary'
-  | 'holiday'
-  | 'vacation'
-  | 'sickLeave'
-  | 'bonus'
-  | 'advance'
-  | 'reimbursement'
-  | 'other'
+
+// Payment (money) status vs. signature (confirmation) status are separate concepts.
+export type PaymentMoneyStatus = 'paid' | 'partiallyPaid' | 'unpaid'
+export type SignatureStatus = 'pendingSignature' | 'signed' | 'rejected'
 
 export interface PaymentRecord {
   id: string
   caregiverId: string
+  caregiverName: string
   employerId: string
   paymentDate: string
   month: number
   year: number
-  category: PaymentCategory
-  amount: number
+  monthlySalary: number
+  saturdayPayment: number
+  holidayPayment: number
+  otherPayment: number
+  totalDue: number
+  totalPaid: number
   paymentMethod: PaymentMethod
   bankReference?: string
   note?: string
+  paymentStatus: PaymentMoneyStatus
+  signatureStatus: SignatureStatus
+  version: number
+  signedVersion?: number
+  signedAt?: string
+  signedBy?: string
+  signedByName?: string
+  signatureData?: string
   deleted?: boolean
   deletedAt?: string
   deletedBy?: string
@@ -140,7 +148,13 @@ export interface PaymentRecord {
   updatedBy: string
 }
 
-export type PaymentAuditAction = 'created' | 'updated' | 'deleted' | 'restored' | 'statusChanged'
+export type PaymentAuditAction =
+  | 'created'
+  | 'updated'
+  | 'deleted'
+  | 'restored'
+  | 'statusChanged'
+  | 'payment_signed'
 
 export interface PaymentAuditEntry {
   id: string

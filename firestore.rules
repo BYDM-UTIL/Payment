@@ -23,8 +23,9 @@ service cloud.firestore {
     }
 
     function userEmployeeId() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.exists ? userDoc.data.employeeId : null;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('employeeId', null)
+        : null;
     }
 
     function isEmployeeOwner(employeeId) {
@@ -128,15 +129,27 @@ service cloud.firestore {
         allow create: if isAdmin()
                       && request.resource.data.employerId == request.auth.uid
                       && request.resource.data.caregiverId == employeeId;
-        allow update: if isAdmin()
-                      && resource.data.employerId == request.auth.uid
-                      && request.resource.data.employerId == resource.data.employerId
-                      && request.resource.data.caregiverId == resource.data.caregiverId;
+        // Admin may edit an unsigned payment. Caregiver may only sign (change signature fields).
+        allow update: if (
+                        isAdmin()
+                        && resource.data.employerId == request.auth.uid
+                        && request.resource.data.employerId == resource.data.employerId
+                        && request.resource.data.caregiverId == resource.data.caregiverId
+                      ) || (
+                        isEmployeeOwner(employeeId)
+                        && resource.data.signatureStatus != 'signed'
+                        && request.resource.data.signatureStatus == 'signed'
+                        && request.resource.data.signedBy == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'signatureStatus', 'signedAt', 'signedBy', 'signedByName',
+                          'signatureData', 'signedVersion', 'updatedAt'
+                        ])
+                      );
         allow delete: if false;
 
         match /audit/{auditId} {
           allow read: if isAdmin() || isEmployeeOwner(employeeId);
-          allow create: if isAdmin();
+          allow create: if isAdmin() || isEmployeeOwner(employeeId);
           allow update, delete: if false;
         }
       }

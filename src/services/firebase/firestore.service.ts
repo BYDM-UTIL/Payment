@@ -12,6 +12,7 @@ import {
   orderBy,
   onSnapshot,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore'
@@ -25,6 +26,7 @@ import type {
   PaymentRecord,
   PaymentAuditEntry,
   PaymentAuditAction,
+  PaymentMethod,
   EmploymentTerms,
 } from '@/types'
 import {
@@ -89,8 +91,6 @@ export async function deleteEmployee(id: string) {
   await deleteDoc(doc(db, 'employees', id))
 }
 
-type PaymentRecordInput = Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'deletedAt' | 'deletedBy'>
-
 function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T
 }
@@ -101,6 +101,11 @@ function paymentCollection(employeeId: string) {
 
 function paymentAuditCollection(employeeId: string, paymentId: string) {
   return collection(db, 'employees', employeeId, 'payments', paymentId, 'audit')
+}
+
+// One shared payment record per (year, month) so admin and caregiver read/write the same doc.
+export function paymentDocId(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, '0')}`
 }
 
 async function addPaymentAudit(
@@ -128,39 +133,125 @@ async function addPaymentAudit(
   })
 }
 
-export async function getPaymentRecords(employeeId: string, year: number, month?: number): Promise<PaymentRecord[]> {
-  const snap = await getDocs(paymentCollection(employeeId))
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }) as PaymentRecord)
-    .filter((record) => record.year === year && record.deleted !== true && (!month || record.month === month))
-    .sort((left, right) => right.paymentDate.localeCompare(left.paymentDate))
+// Realtime subscription to all of a caregiver's payments (admin + caregiver share this).
+export function subscribeToPayments(
+  employeeId: string,
+  callback: (payments: PaymentRecord[]) => void,
+): Unsubscribe {
+  return onSnapshot(paymentCollection(employeeId), (snap) => {
+    const payments = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as PaymentRecord)
+      .filter((record) => record.deleted !== true)
+      .sort((left, right) => right.paymentDate.localeCompare(left.paymentDate))
+    callback(payments)
+  })
 }
 
-export async function createPaymentRecord(input: PaymentRecordInput, performedByName: string): Promise<string> {
-  const ref = await addDoc(paymentCollection(input.caregiverId), {
-    ...withoutUndefined(input),
+export async function getPaymentAudit(employeeId: string, paymentId: string): Promise<PaymentAuditEntry[]> {
+  const snap = await getDocs(query(paymentAuditCollection(employeeId, paymentId), orderBy('timestamp', 'desc')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PaymentAuditEntry)
+}
+
+interface MonthlyPaymentInput {
+  caregiverId: string
+  caregiverName: string
+  employerId: string
+  month: number
+  year: number
+  paymentDate: string
+  monthlySalary: number
+  saturdayPayment: number
+  holidayPayment: number
+  otherPayment: number
+  totalPaid: number
+  paymentMethod: PaymentMethod
+  bankReference?: string
+  note?: string
+}
+
+// Admin create/edit. Increments version and recomputes money status; resets to pending signature.
+export async function upsertMonthlyPayment(input: MonthlyPaymentInput, performedBy: string, performedByName: string): Promise<string> {
+  const id = paymentDocId(input.year, input.month)
+  const ref = doc(paymentCollection(input.caregiverId), id)
+  const snap = await getDoc(ref)
+  const totalDue =
+    (input.monthlySalary || 0) + (input.saturdayPayment || 0) + (input.holidayPayment || 0) + (input.otherPayment || 0)
+  const paymentStatus = input.totalPaid <= 0 ? 'unpaid' : input.totalPaid >= totalDue ? 'paid' : 'partiallyPaid'
+
+  if (snap.exists()) {
+    const before = snap.data() as Record<string, unknown>
+    if (before.signatureStatus === 'signed') throw new Error('payment-already-signed')
+    const nextVersion = (Number(before.version) || 1) + 1
+    const after = withoutUndefined({
+      ...input,
+      totalDue,
+      paymentStatus,
+      signatureStatus: 'pendingSignature',
+      version: nextVersion,
+      updatedAt: isoNow(),
+      updatedBy: performedBy,
+    })
+    await updateDoc(ref, after)
+    await addPaymentAudit(input.caregiverId, id, 'updated', performedBy, performedByName, before, after)
+    return id
+  }
+
+  const record = withoutUndefined({
+    ...input,
+    totalDue,
+    paymentStatus,
+    signatureStatus: 'pendingSignature',
+    version: 1,
     deleted: false,
     createdAt: isoNow(),
+    createdBy: performedBy,
     updatedAt: isoNow(),
+    updatedBy: performedBy,
   })
-  await addPaymentAudit(input.caregiverId, ref.id, 'created', input.createdBy, performedByName, undefined, withoutUndefined(input) as Record<string, unknown>)
-  return ref.id
+  await setDoc(ref, record)
+  await addPaymentAudit(input.caregiverId, id, 'created', performedBy, performedByName, undefined, record as Record<string, unknown>)
+  return id
 }
 
-export async function updatePaymentRecord(
+// Caregiver signature. Transaction validates version to avoid signing stale data; only signature fields change.
+export async function signPayment(
   employeeId: string,
   paymentId: string,
-  data: Partial<PaymentRecordInput>,
-  performedBy: string,
-  performedByName: string,
-) {
+  signatureData: string,
+  signedBy: string,
+  signedByName: string,
+  expectedVersion: number,
+): Promise<void> {
   const ref = doc(paymentCollection(employeeId), paymentId)
-  const snap = await getDoc(ref)
-  if (!snap.exists()) throw new Error('payment-not-found')
-  const before = snap.data() as Record<string, unknown>
-  const after = withoutUndefined({ ...before, ...data, updatedAt: isoNow(), updatedBy: performedBy })
-  await updateDoc(ref, after)
-  await addPaymentAudit(employeeId, paymentId, 'updated', performedBy, performedByName, before, after)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) throw new Error('payment-not-found')
+    const data = snap.data()
+    if (data.signatureStatus === 'signed') throw new Error('payment-already-signed')
+    if (Number(data.version) !== expectedVersion) throw new Error('payment-version-changed')
+    tx.update(ref, {
+      signatureStatus: 'signed',
+      signedAt: isoNow(),
+      signedBy,
+      signedByName,
+      signatureData,
+      signedVersion: expectedVersion,
+      updatedAt: isoNow(),
+    })
+    const auditRef = doc(paymentAuditCollection(employeeId, paymentId))
+    tx.set(auditRef, {
+      paymentId,
+      caregiverId: employeeId,
+      action: 'payment_signed',
+      performedBy: signedBy,
+      performedByName: signedByName,
+      timestamp: isoNow(),
+      serverTime: serverTimestamp(),
+      before: null,
+      after: { signatureStatus: 'signed', signedVersion: expectedVersion },
+      changedFields: ['signatureStatus'],
+    })
+  })
 }
 
 export async function softDeletePayment(employeeId: string, paymentId: string, performedBy: string, performedByName: string) {
@@ -168,14 +259,8 @@ export async function softDeletePayment(employeeId: string, paymentId: string, p
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('payment-not-found')
   const before = snap.data() as Record<string, unknown>
-  const after = { ...before, deleted: true, deletedAt: isoNow(), deletedBy: performedBy }
-  await updateDoc(ref, { deleted: true, deletedAt: after.deletedAt, deletedBy: performedBy, updatedAt: isoNow(), updatedBy: performedBy })
-  await addPaymentAudit(employeeId, paymentId, 'deleted', performedBy, performedByName, before, after)
-}
-
-export async function getPaymentAudit(employeeId: string, paymentId: string): Promise<PaymentAuditEntry[]> {
-  const snap = await getDocs(query(paymentAuditCollection(employeeId, paymentId), orderBy('timestamp', 'desc')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PaymentAuditEntry)
+  await updateDoc(ref, { deleted: true, deletedAt: isoNow(), deletedBy: performedBy, updatedAt: isoNow(), updatedBy: performedBy })
+  await addPaymentAudit(employeeId, paymentId, 'deleted', performedBy, performedByName, before, { ...before, deleted: true })
 }
 
 export async function getCurrentEmploymentTerms(employeeId: string): Promise<EmploymentTerms | null> {
