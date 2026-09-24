@@ -24,14 +24,11 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Only precache app assets. Never cache Auth/Firestore/API responses in the SW
+        // to avoid cross-account data leakage and stale financial data.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'firestore-cache' }
-          }
-        ]
+        navigateFallbackDenylist: [/^https:\/\/firestore\.googleapis\.com/, /^https:\/\/.*\.googleapis\.com/],
+        runtimeCaching: []
       }
     })
   ],

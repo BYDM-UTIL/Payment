@@ -8,6 +8,7 @@ import { updateUserProfile } from '@/services/firebase/auth.service'
 import { createEmployee, updateEmployee } from '@/services/firebase/firestore.service'
 import { FormField, Input, Textarea } from '@/components/FormField'
 import { CheckCircle } from 'lucide-react'
+import type { Employee } from '@/types'
 
 const profileSchema = z.object({
   firstName: z.string().min(1, 'validation.required'),
@@ -79,7 +80,7 @@ export function CompleteEmployeeProfilePage() {
 
       // Create employee record
       const fullName = `${data.firstName} ${data.lastName}`
-      const employeeData = {
+      const employeeData: Partial<Employee> = {
         employerId: user.uid,
         userId: user.uid,
         firstName: data.firstName,
@@ -92,7 +93,7 @@ export function CompleteEmployeeProfilePage() {
         ...DEFAULT_SALARY_VALUES,
         active: true,
         notes: '',
-      } as any
+      }
 
       console.log('[Profile Page] Employee data to submit:', employeeData)
 
@@ -108,7 +109,7 @@ export function CompleteEmployeeProfilePage() {
         await updateEmployee(employeeId, employeeData)
       } else {
         console.log('[Profile Page] Calling createEmployee...')
-        employeeId = await createEmployee(employeeData)
+        employeeId = await createEmployee(employeeData as Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>)
         console.log('[Profile Page] Employee created with ID:', employeeId)
       }
 
@@ -125,7 +126,8 @@ export function CompleteEmployeeProfilePage() {
       navigate('/my-payments')
     } catch (err) {
       console.error('Error completing profile:', err)
-      console.error('Error details:', (err as any)?.code, (err as any)?.message)
+      const code = err instanceof Error ? err.message : String(err)
+      console.error('Error details:', code)
       setSubmitError('שגיאה בעת שמירת הפרטים. בדוק את הנתונים ונסה שוב.')
     } finally {
       setIsSubmitting(false)

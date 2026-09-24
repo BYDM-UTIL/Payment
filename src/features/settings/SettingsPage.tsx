@@ -2,34 +2,116 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/useAppStore'
 import { FormField, Input } from '@/components/FormField'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getYearSettings, setYearSettings, getEmployee, updateEmployee } from '@/services/firebase/firestore.service'
+
+interface RateSettings {
+  baseSalary: number
+  pocketMoney: number
+  shabbatRate: number
+  vacationDayRate: number
+  holidayRate: number
+  pensionRate: number
+  recuperationDayRate: number
+  recuperationDays: number
+}
+
+const DEFAULT_RATES: RateSettings = {
+  baseSalary: 6400,
+  pocketMoney: 400,
+  shabbatRate: 426,
+  vacationDayRate: 250,
+  holidayRate: 426,
+  pensionRate: 12.5,
+  recuperationDayRate: 378,
+  recuperationDays: 6,
+}
 
 export function SettingsPage() {
   const { t } = useTranslation()
-  const { currentYear, setCurrentYear } = useAppStore()
+  const { currentYear, setCurrentYear, currentEmployeeId } = useAppStore()
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  // Local form state (in a real app this comes from Firestore year settings)
-  const [settings, setSettings] = useState({
-    baseSalary: 6400,
-    pocketMoney: 400,
-    shabbatRate: 426,
-    vacationRate: 250,
-    holidayRate: 426,
-    pensionRate: 12.5,
-    recuperationRate: 378,
-    recuperationDays: 6,
-    employerName: 'Nofam Care Services',
-    employerPhone: '',
-    employerEmail: '',
-    employeeName: 'Lina Markov',
-  })
+  const [rates, setRates] = useState<RateSettings>(DEFAULT_RATES)
+  const [employeeName, setEmployeeName] = useState('')
 
-  function handleSave() {
-    // In production: save to Firestore year settings
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+  // Load persisted year settings + employee name from Firestore
+  useEffect(() => {
+    let active = true
+    async function load() {
+      if (!currentEmployeeId) {
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      setError('')
+      try {
+        const [settings, employee] = await Promise.all([
+          getYearSettings(currentEmployeeId, currentYear),
+          getEmployee(currentEmployeeId),
+        ])
+        if (!active) return
+        if (settings) {
+          setRates({
+            baseSalary: settings.baseSalary ?? DEFAULT_RATES.baseSalary,
+            pocketMoney: settings.pocketMoney ?? DEFAULT_RATES.pocketMoney,
+            shabbatRate: settings.shabbatRate ?? DEFAULT_RATES.shabbatRate,
+            vacationDayRate: settings.vacationDayRate ?? DEFAULT_RATES.vacationDayRate,
+            holidayRate: settings.holidayRate ?? DEFAULT_RATES.holidayRate,
+            pensionRate: settings.pensionRate ?? DEFAULT_RATES.pensionRate,
+            recuperationDayRate: settings.recuperationDayRate ?? DEFAULT_RATES.recuperationDayRate,
+            recuperationDays: settings.recuperationDays ?? DEFAULT_RATES.recuperationDays,
+          })
+        }
+        if (employee) setEmployeeName(employee.fullName ?? '')
+      } catch (err) {
+        console.error('[Settings] Failed to load settings:', err)
+        if (active) setError(t('settings.loadError'))
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      active = false
+    }
+  }, [currentEmployeeId, currentYear, t])
+
+  async function handleSave() {
+    if (!currentEmployeeId) {
+      setError(t('settings.noEmployee'))
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      await setYearSettings(currentEmployeeId, currentYear, rates)
+      if (employeeName.trim()) {
+        await updateEmployee(currentEmployeeId, { fullName: employeeName.trim() })
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      console.error('[Settings] Failed to save settings:', err)
+      setError(t('settings.saveError'))
+    } finally {
+      setSaving(false)
+    }
   }
+
+  const rateFields: { label: string; key: keyof RateSettings }[] = [
+    { label: t('settings.baseSalary'), key: 'baseSalary' },
+    { label: t('settings.pocketMoney'), key: 'pocketMoney' },
+    { label: t('settings.shabbatRate'), key: 'shabbatRate' },
+    { label: t('settings.vacationRate'), key: 'vacationDayRate' },
+    { label: t('settings.holidayRate'), key: 'holidayRate' },
+    { label: t('settings.pensionRate'), key: 'pensionRate' },
+    { label: t('settings.recuperationRate'), key: 'recuperationDayRate' },
+    { label: t('settings.recuperationDays'), key: 'recuperationDays' },
+  ]
 
   return (
     <div className="flex flex-col gap-6 pb-20 sm:pb-4">
@@ -58,57 +140,24 @@ export function SettingsPage() {
       {/* Rates */}
       <div className="card">
         <h2 className="font-semibold text-gray-800 mb-4">{t('dashboard.year')} – {currentYear}</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {[
-            { label: t('settings.baseSalary'), key: 'baseSalary' },
-            { label: t('settings.pocketMoney'), key: 'pocketMoney' },
-            { label: t('settings.shabbatRate'), key: 'shabbatRate' },
-            { label: t('settings.vacationRate'), key: 'vacationRate' },
-            { label: t('settings.holidayRate'), key: 'holidayRate' },
-            { label: t('settings.pensionRate'), key: 'pensionRate' },
-            { label: t('settings.recuperationRate'), key: 'recuperationRate' },
-            { label: t('settings.recuperationDays'), key: 'recuperationDays' },
-          ].map(({ label, key }) => (
-            <FormField key={key} label={label}>
-              <Input
-                type="number"
-                step="0.1"
-                value={(settings as Record<string, number | string>)[key] as number}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, [key]: Number(e.target.value) }))
-                }
-              />
-            </FormField>
-          ))}
-        </div>
-      </div>
-
-      {/* Employer */}
-      <div className="card">
-        <h2 className="font-semibold text-gray-800 mb-4">{t('settings.employerDetails')}</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label={t('settings.employerName')}>
-            <Input
-              type="text"
-              value={settings.employerName}
-              onChange={(e) => setSettings((s) => ({ ...s, employerName: e.target.value }))}
-            />
-          </FormField>
-          <FormField label={t('settings.employerPhone')}>
-            <Input
-              type="tel"
-              value={settings.employerPhone}
-              onChange={(e) => setSettings((s) => ({ ...s, employerPhone: e.target.value }))}
-            />
-          </FormField>
-          <FormField label={t('settings.employerEmail')}>
-            <Input
-              type="email"
-              value={settings.employerEmail}
-              onChange={(e) => setSettings((s) => ({ ...s, employerEmail: e.target.value }))}
-            />
-          </FormField>
-        </div>
+        {loading ? (
+          <p className="text-sm text-gray-500">{t('common.loading')}</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {rateFields.map(({ label, key }) => (
+              <FormField key={key} label={label}>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={rates[key]}
+                  onChange={(e) =>
+                    setRates((s) => ({ ...s, [key]: Number(e.target.value) }))
+                  }
+                />
+              </FormField>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Employee */}
@@ -117,17 +166,28 @@ export function SettingsPage() {
         <FormField label={t('employees.fullName')}>
           <Input
             type="text"
-            value={settings.employeeName}
-            onChange={(e) => setSettings((s) => ({ ...s, employeeName: e.target.value }))}
+            value={employeeName}
+            onChange={(e) => setEmployeeName(e.target.value)}
           />
         </FormField>
       </div>
 
+      {error && (
+        <p className="text-sm text-danger-600 bg-danger-50 rounded-xl px-3 py-2">{error}</p>
+      )}
+
       {/* Save button */}
       <div>
-        <button onClick={handleSave} className="btn-primary w-full sm:w-auto px-8">
-          {saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
+        <button
+          onClick={handleSave}
+          disabled={saving || loading || !currentEmployeeId}
+          className="btn-primary w-full sm:w-auto px-8 disabled:opacity-50"
+        >
+          {saving ? t('common.loading') : saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
         </button>
+        {!currentEmployeeId && (
+          <p className="text-xs text-gray-500 mt-2">{t('settings.noEmployee')}</p>
+        )}
       </div>
     </div>
   )

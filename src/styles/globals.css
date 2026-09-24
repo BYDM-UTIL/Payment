@@ -72,10 +72,11 @@
   }
 
   /* Status badges */
-  .badge-paid    { @apply bg-success-50 text-success-700 border border-success-500; }
-  .badge-partial { @apply bg-danger-50 text-danger-700 border border-danger-500; }
-  .badge-pending { @apply bg-warning-50 text-warning-700 border border-warning-500; }
-  .badge-empty   { @apply bg-gray-100 text-gray-500 border border-gray-300; }
+  .badge-paid     { @apply bg-success-50 text-success-700 border border-success-500; }
+  .badge-partial  { @apply bg-danger-50 text-danger-700 border border-danger-500; }
+  .badge-pending  { @apply bg-warning-50 text-warning-700 border border-warning-500; }
+  .badge-overpaid { @apply bg-primary-50 text-primary-700 border border-primary-500; }
+  .badge-empty    { @apply bg-gray-100 text-gray-500 border border-gray-300; }
 
   /* Mobile table → cards */
   @media (max-width: 768px) {

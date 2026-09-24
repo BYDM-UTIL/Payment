@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 
 const statusClasses: Record<PaymentStatus, string> = {
-  paid:    'badge-paid',
-  partial: 'badge-partial',
-  pending: 'badge-pending',
-  empty:   'badge-empty',
+  paid:     'badge-paid',
+  partial:  'badge-partial',
+  pending:  'badge-pending',
+  overpaid: 'badge-overpaid',
+  empty:    'badge-empty',
 }
 
 interface Props {

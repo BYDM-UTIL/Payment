@@ -19,10 +19,11 @@ export function MonthCard({ month, payment, onEdit, onSign, onAttach, onViewSign
   const status = payment?.paymentStatus ?? 'empty'
 
   const borderColor = {
-    paid:    'border-l-success-500',
-    partial: 'border-l-danger-500',
-    pending: 'border-l-warning-500',
-    empty:   'border-l-gray-300',
+    paid:     'border-l-success-500',
+    partial:  'border-l-danger-500',
+    pending:  'border-l-warning-500',
+    overpaid: 'border-l-primary-500',
+    empty:    'border-l-gray-300',
   }[status]
 
   return (

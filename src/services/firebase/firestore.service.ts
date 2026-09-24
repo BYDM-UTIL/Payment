@@ -11,9 +11,11 @@ import {
   where,
   orderBy,
   onSnapshot,
+  writeBatch,
+  serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './config'
+import { db, auth } from './config'
 import type { Employee, MonthlyPayment, PensionPayment, YearSettings, AuditLog } from '@/types'
 import {
   calculateGrossTotal,
@@ -139,6 +141,9 @@ export async function saveMonthlyPayment(
   const paymentStatus = calculatePaymentStatus(grossTotal, totalPaid, true)
 
   const ref = doc(db, 'employees', employeeId, 'years', String(year), 'monthlyPayments', String(month))
+  const prev = await getDoc(ref)
+  const isCreate = !prev.exists()
+
   await setDoc(
     ref,
     {
@@ -153,6 +158,13 @@ export async function saveMonthlyPayment(
     },
     { merge: true }
   )
+
+  await writeAuditSafe(employeeId, {
+    action: isCreate ? 'create' : 'update',
+    entityType: 'payment',
+    entityId: `${year}-${month}`,
+    after: { grossTotal, totalPaid, balanceDue, paymentStatus },
+  })
 }
 
 export async function saveSignature(
@@ -174,7 +186,9 @@ export async function saveSignature(
     throw new Error('payment-already-signed')
   }
 
-  await setDoc(
+  // Couple the signature and its audit entry in a single atomic batch.
+  const batch = writeBatch(db)
+  batch.set(
     ref,
     {
       signed: true,
@@ -185,6 +199,16 @@ export async function saveSignature(
     },
     { merge: true }
   )
+  const auditRef = doc(collection(db, 'employees', employeeId, 'auditLog'))
+  batch.set(auditRef, {
+    action: 'sign',
+    entityType: 'payment',
+    entityId: `${year}-${month}`,
+    userId: signedBy,
+    createdAt: isoNow(),
+    serverTime: serverTimestamp(),
+  })
+  await batch.commit()
 }
 
 export async function addAttachmentToPayment(
@@ -258,9 +282,35 @@ export async function savePensionPayment(
     },
     { merge: true }
   )
+
+  await writeAuditSafe(employeeId, {
+    action: 'update',
+    entityType: 'pension',
+    entityId: `${year}-${month}`,
+    after: { requiredPensionAmount, amountPaid: input.amountPaid, balanceDue },
+  })
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
+
+// Best-effort audit write for non-atomic events. Uses the current auth uid.
+async function writeAuditSafe(
+  employeeId: string,
+  log: { action: AuditLog['action']; entityType: AuditLog['entityType']; entityId: string; before?: Record<string, unknown>; after?: Record<string, unknown> }
+) {
+  const uid = auth.currentUser?.uid
+  if (!uid) return
+  try {
+    await addDoc(collection(db, 'employees', employeeId, 'auditLog'), {
+      ...log,
+      userId: uid,
+      createdAt: isoNow(),
+      serverTime: serverTimestamp(),
+    })
+  } catch (err) {
+    console.warn('[Audit] Failed to write audit log:', err)
+  }
+}
 
 export async function addAuditLog(employeeId: string, log: Omit<AuditLog, 'id' | 'createdAt'>) {
   await addDoc(collection(db, 'employees', employeeId, 'auditLog'), {

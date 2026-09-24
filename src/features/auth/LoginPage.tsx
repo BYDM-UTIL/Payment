@@ -15,7 +15,6 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
 type AuthMode = 'login' | 'register'
 
-const ADMIN_CREATION_PASSWORD = (import.meta.env.VITE_ADMIN_CREATION_PASSWORD ?? '').trim()
 const DEFAULT_SALARY_VALUES = {
   baseSalary: 6400,
   pocketMoney: 400,
@@ -38,9 +37,6 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [adminPassword, setAdminPassword] = useState('')
-  const [showEmployerOption, setShowEmployerOption] = useState(false)
-  const [registerAsEmployer, setRegisterAsEmployer] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -52,15 +48,6 @@ export function LoginPage() {
     if (!displayName.trim()) return 'שם מלא הוא שדה חובה.'
     if (password.length < 6) return 'הסיסמה חייבת להכיל לפחות 6 תווים.'
     if (password !== confirmPassword) return 'אימות הסיסמה לא תואם.'
-
-    if (registerAsEmployer) {
-      if (!ADMIN_CREATION_PASSWORD) {
-        return 'לא הוגדרה סיסמת יצירת מעסיק במערכת (VITE_ADMIN_CREATION_PASSWORD).'
-      }
-      if (!adminPassword.trim()) return 'ליצירת משתמש מעסיק יש להזין סיסמת אדמין.'
-      if (adminPassword.trim() !== ADMIN_CREATION_PASSWORD) return 'סיסמת האדמין שגויה.'
-    }
-
     return null
   }
 
@@ -123,10 +110,10 @@ export function LoginPage() {
       
       const uid = result.user.uid
 
-      // If registering as employer (with valid admin password), create employer user
-      // Otherwise, create employee user who must complete profile
-      const role = registerAsEmployer ? 'employer' : 'employee'
-      const profileCompleted = registerAsEmployer
+      // Self-registration always creates an employee who must complete their profile.
+      // Employer accounts are provisioned via a trusted admin action, not from this form.
+      const role = 'employee' as const
+      const profileCompleted = false
 
       console.log('Creating user profile:', { uid, role, profileCompleted })
       
@@ -139,22 +126,20 @@ export function LoginPage() {
         createdAt: new Date().toISOString(),
       })
 
-      if (role === 'employee') {
-        const employeeId = await createEmployee({
-          employerId: uid,
-          userId: uid,
-          fullName: displayName.trim(),
-          startDate: new Date().toISOString().slice(0, 10),
-          ...DEFAULT_SALARY_VALUES,
-          active: true,
-          notes: '',
-        })
+      const employeeId = await createEmployee({
+        employerId: uid,
+        userId: uid,
+        fullName: displayName.trim(),
+        startDate: new Date().toISOString().slice(0, 10),
+        ...DEFAULT_SALARY_VALUES,
+        active: true,
+        notes: '',
+      })
 
-        await updateUserProfile(uid, {
-          employeeId,
-          employeeProfileCompleted: false,
-        })
-      }
+      await updateUserProfile(uid, {
+        employeeId,
+        employeeProfileCompleted: false,
+      })
       
       console.log('User profile created successfully')
     } catch (error) {
@@ -226,8 +211,6 @@ export function LoginPage() {
               onClick={() => {
                 setMode('login')
                 resetAuthError()
-                setShowEmployerOption(false)
-                setRegisterAsEmployer(false)
               }}
             >
               התחברות
@@ -238,8 +221,6 @@ export function LoginPage() {
               onClick={() => {
                 setMode('register')
                 resetAuthError()
-                setShowEmployerOption(false)
-                setRegisterAsEmployer(false)
               }}
             >
               משתמש חדש
@@ -306,51 +287,6 @@ export function LoginPage() {
                     required
                   />
                 </FormField>
-
-                {!showEmployerOption && (
-                  <button
-                    type="button"
-                    onClick={() => setShowEmployerOption(true)}
-                    className="text-xs text-primary-600 hover:text-primary-700 underline text-right"
-                  >
-                    נרשם כמעסיק?
-                  </button>
-                )}
-
-                {showEmployerOption && (
-                  <>
-                    <div className="bg-primary-50 rounded-lg p-3 border border-primary-200">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={registerAsEmployer}
-                          onChange={(e) => {
-                            setRegisterAsEmployer(e.target.checked)
-                            resetAuthError()
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <span className="text-sm text-gray-700">רשום כמעסיק עם סיסמת אדמין</span>
-                      </label>
-                    </div>
-
-                    {registerAsEmployer && (
-                      <FormField label="סיסמת אדמין" required>
-                        <Input
-                          type="password"
-                          value={adminPassword}
-                          onChange={(e) => {
-                            setAdminPassword(e.target.value)
-                            resetAuthError()
-                          }}
-                          placeholder="הזן סיסמת אדמין"
-                          autoComplete="off"
-                          required
-                        />
-                      </FormField>
-                    )}
-                  </>
-                )}
               </>
             )}
 

@@ -72,7 +72,7 @@ export interface YearSettings {
 
 // ─── Payment Status ───────────────────────────────────────────────────────────
 
-export type PaymentStatus = 'paid' | 'partial' | 'pending' | 'empty'
+export type PaymentStatus = 'paid' | 'partial' | 'pending' | 'overpaid' | 'empty'
 
 // ─── Monthly Payment ──────────────────────────────────────────────────────────
 

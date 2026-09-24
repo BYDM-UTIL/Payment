@@ -7,10 +7,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper: get user role from /users/{uid}
+    // Helper: get user role from /users/{uid}. Missing profile => non-privileged.
     function userRole() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.exists ? userDoc.data.role : 'admin';
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'employee')
+        : 'employee';
     }
 
     function isEmployer() {
@@ -42,7 +43,7 @@ service cloud.firestore {
         && resource.data.signed != true
         && request.resource.data.signed == true
         && request.resource.data.signedBy == request.auth.uid
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'signed',
           'employeeSignatureUrl',
           'signedAt',
@@ -51,11 +52,25 @@ service cloud.firestore {
         ]);
     }
 
+    // Financial + signature fields that must not change once a payment is signed.
+    function signedLockedKeys() {
+      return [
+        'baseSalary', 'pocketMoney', 'shabbatAmount', 'vacationAmount', 'holidayAmount',
+        'grossTotal', 'cashPaid', 'payslipPaid', 'bankTransferPaid', 'totalPaid',
+        'balanceDue', 'paymentStatus', 'month', 'year',
+        'signed', 'employeeSignatureUrl', 'signedAt', 'signedBy'
+      ];
+    }
+
     // Users collection - allow new users to create their profile
     match /users/{userId} {
       allow read: if isAuth() && request.auth.uid == userId;
       allow create: if isAuth() && request.auth.uid == userId;
-      allow update, delete: if isAuth() && request.auth.uid == userId;
+      // A user may update their own profile but can never change their own role
+      // (no self-promotion to employer).
+      allow update: if isAuth() && request.auth.uid == userId
+                    && request.resource.data.role == resource.data.role;
+      allow delete: if isAuth() && request.auth.uid == userId;
     }
 
     // Employers collection
@@ -82,8 +97,17 @@ service cloud.firestore {
         // Monthly payments
         match /monthlyPayments/{month} {
           allow read: if canReadEmployee(employeeId);
-          allow create, delete: if canReadEmployee(employeeId) && isEmployer();
-          allow update: if (canReadEmployee(employeeId) && isEmployer()) || canSignPayment(employeeId);
+          allow create: if canReadEmployee(employeeId) && isEmployer();
+          allow delete: if canReadEmployee(employeeId) && isEmployer()
+                        && resource.data.signed != true;
+          // Employer may edit only while unsigned, or touch non-locked fields
+          // (e.g. attachments/notes) after signing. The employee may sign once.
+          allow update: if (
+                          canReadEmployee(employeeId) && isEmployer() && (
+                            resource.data.signed != true ||
+                            !request.resource.data.diff(resource.data).affectedKeys().hasAny(signedLockedKeys())
+                          )
+                        ) || canSignPayment(employeeId);
         }
 
         // Pension payments

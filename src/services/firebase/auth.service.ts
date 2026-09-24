@@ -11,8 +11,9 @@ import type { AppUser } from '@/types'
 
 function normalizeUserProfile(uid: string, data: Record<string, unknown>): AppUser {
   const rawRole = data.role
-  // Map legacy 'admin' role to 'employer'
-  const role: 'employer' | 'employee' = rawRole === 'employer' ? 'employer' : 'employee'
+  // Legacy roles: 'admin' -> employer, 'viewer'/anything else -> employee
+  const role: 'employer' | 'employee' =
+    rawRole === 'employer' || rawRole === 'admin' ? 'employer' : 'employee'
 
   return {
     uid,

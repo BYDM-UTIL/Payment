@@ -34,6 +34,11 @@ export function calculateBalanceDue(grossTotal: number, totalPaid: number): numb
   return Math.max(0, grossTotal - totalPaid)
 }
 
+// Amount paid beyond what was due; kept separate so overpayment is never silently erased.
+export function calculateOverpaid(grossTotal: number, totalPaid: number): number {
+  return Math.max(0, totalPaid - grossTotal)
+}
+
 export function calculatePaymentStatus(
   grossTotal: number,
   totalPaid: number,
@@ -41,7 +46,8 @@ export function calculatePaymentStatus(
 ): PaymentStatus {
   if (!hasData || grossTotal === 0) return 'empty'
   const balance = grossTotal - totalPaid
-  if (balance <= 0) return 'paid'
+  if (balance < 0) return 'overpaid'
+  if (balance === 0) return 'paid'
   if (totalPaid > 0) return 'partial'
   return 'pending'
 }
@@ -79,7 +85,9 @@ export function calculateAnnualPaymentSummary(payments: MonthlyPayment[]): Annua
     annualGrossTotal: filled.reduce((acc, p) => acc + p.grossTotal, 0),
     annualTotalPaid: filled.reduce((acc, p) => acc + p.totalPaid, 0),
     annualBalanceDue: filled.reduce((acc, p) => acc + p.balanceDue, 0),
-    monthsPaid: payments.filter((p) => p.paymentStatus === 'paid').length,
+    monthsPaid: payments.filter(
+      (p) => p.paymentStatus === 'paid' || p.paymentStatus === 'overpaid'
+    ).length,
     monthsWithDebt: payments.filter(
       (p) => p.paymentStatus === 'partial' || p.paymentStatus === 'pending'
     ).length,
