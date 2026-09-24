@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight, History, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, History, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { getActiveEmployees, getEmployee, getPaymentAudit, getPaymentRecords, createPaymentRecord, updatePaymentRecord, softDeletePayment, getCurrentEmploymentTerms } from '@/services/firebase/firestore.service'
 import { formatCurrency, calculatePaymentStatus } from '@/utils/calculations'
@@ -21,6 +21,8 @@ export function PaymentsPage({ mode = 'employer' }: Props) {
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [year, setYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
+  const [employeeLoading, setEmployeeLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PaymentRecord | null>(null)
   const [history, setHistory] = useState<PaymentAuditEntry[]>([])
@@ -31,19 +33,26 @@ export function PaymentsPage({ mode = 'employer' }: Props) {
     let active = true
     async function loadEmployee() {
       if (!user) return
-      const list = mode === 'employer' ? await getActiveEmployees(user.uid) : []
-      const selected = mode === 'employee' && user.employeeId
-        ? await getEmployee(user.employeeId)
-        : list.find((item) => item.id === currentEmployeeId) ?? (list.length === 1 ? list[0] : null)
-      if (selected && active) {
-        setEmployee(selected)
-        getCurrentEmploymentTerms(selected.id).then(setTerms).catch(() => undefined)
-        if (mode === 'employer') setCurrentEmployeeId(selected.id)
+      setEmployeeLoading(true)
+      try {
+        const list = mode === 'employer' ? await getActiveEmployees(user.uid) : []
+        const selected = mode === 'employee' && user.employeeId
+          ? await getEmployee(user.employeeId)
+          : list.find((item) => item.id === currentEmployeeId) ?? (list.length === 1 ? list[0] : null)
+        if (selected && active) {
+          setEmployee(selected)
+          getCurrentEmploymentTerms(selected.id).then(setTerms).catch(() => undefined)
+          if (mode === 'employer') setCurrentEmployeeId(selected.id)
+        } else if (active) {
+          setEmployee(null)
+        }
+      } finally {
+        if (active) setEmployeeLoading(false)
       }
     }
     loadEmployee().catch(() => active && setError(t('common.error')))
     return () => { active = false }
-  }, [currentEmployeeId, mode, setCurrentEmployeeId, t, user])
+  }, [currentEmployeeId, mode, refreshKey, setCurrentEmployeeId, t, user])
 
   useEffect(() => {
     if (!employee) return
@@ -52,7 +61,7 @@ export function PaymentsPage({ mode = 'employer' }: Props) {
       .then(setRecords)
       .catch(() => setError(t('common.error')))
       .finally(() => setLoading(false))
-  }, [employee, t, year])
+  }, [employee, refreshKey, t, year])
 
   const monthRecords = useMemo(() => records.filter((record) => record.month === month && !record.deleted), [month, records])
   const totalPaid = monthRecords.reduce((sum, record) => sum + record.amount, 0)
@@ -88,13 +97,14 @@ export function PaymentsPage({ mode = 'employer' }: Props) {
     else setMonth(next)
   }
 
+  if (employeeLoading) return <div className="card text-center py-12 text-gray-500">{t('common.loading')}</div>
   if (!employee) return <div className="card text-center py-12"><p className="text-gray-600">{t('payments.noActiveCaregiver')}</p><button className="btn-primary mt-4" onClick={() => window.location.assign('/employees')}>{t('payments.manageCaregivers')}</button></div>
 
   return (
     <div className="flex flex-col gap-5 pb-20 sm:pb-4">
       <div className="flex items-start justify-between gap-3">
         <div><p className="text-sm text-gray-500">{mode === 'employee' ? t('payments.myPaymentsTitle') : t('payments.tracking')}</p><h1 className="text-2xl font-bold text-gray-900">{mode === 'employee' ? employee.fullName : `${t('payments.tracking')} – ${employee.fullName}`}</h1></div>
-        {mode === 'employer' && <button className="btn-primary flex items-center gap-2" onClick={() => { setEditing(null); setModalOpen(true) }}><Plus size={18} />{t('payments.addPayment')}</button>}
+        <div className="flex gap-2"> <button className="btn-secondary !p-2" onClick={() => setRefreshKey((value) => value + 1)} aria-label={t('payments.refresh')}><RefreshCw size={18} /></button>{mode === 'employer' && <button className="btn-primary flex items-center gap-2" onClick={() => { setEditing(null); setModalOpen(true) }}><Plus size={18} />{t('payments.addPayment')}</button>}</div>
       </div>
       <div className="card flex items-center justify-between gap-2"><button className="btn-secondary !px-3" onClick={() => shiftMonth(-1)}><ChevronRight size={18} /></button><div className="text-center"><p className="font-bold text-lg">{t(`months.${month}`)} {year}</p><p className="text-sm text-gray-500">{formatIsraeliDate(`${year}-${String(month).padStart(2, '0')}-01`)}</p></div><button className="btn-secondary !px-3" onClick={() => shiftMonth(1)}><ChevronLeft size={18} /></button></div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><div className="card"><p className="text-xs text-gray-500">{t('payments.monthlySalary')}</p><p className="mt-1 text-xl font-bold">{formatCurrency(employee.baseSalary)}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.totalPaid')}</p><p className="mt-1 text-xl font-bold text-success-700">{formatCurrency(totalPaid)}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.remaining')}</p><p className="mt-1 text-xl font-bold">{formatCurrency(Math.max(0, totalDue - totalPaid))}</p></div><div className="card"><p className="text-xs text-gray-500">{t('payments.status')}</p><div className="mt-2"><StatusBadge status={status} /></div></div></div>

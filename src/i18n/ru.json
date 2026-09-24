@@ -58,6 +58,7 @@
     "noActiveCaregiver": "Нет назначенной активной помощницы",
     "manageCaregivers": "Управление помощницами",
     "confirmDelete": "Удалить платеж? История будет сохранена.",
+    "refresh": "Обновить данные",
     "methods": { "cash": "Наличные", "bankTransfer": "Банковский перевод" },
     "categories": { "monthlySalary": "Ежемесячная зарплата", "holiday": "Праздничные", "vacation": "Отпуск", "sickLeave": "Больничный", "bonus": "Бонус", "advance": "Аванс", "reimbursement": "Возмещение", "other": "Другое" },
     "audit": { "created": "Платеж создан", "updated": "Платеж изменен", "deleted": "Платеж удален", "restored": "Платеж восстановлен", "statusChanged": "Статус изменен" },

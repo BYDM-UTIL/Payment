@@ -58,6 +58,7 @@
     "noActiveCaregiver": "No active caregiver is currently assigned",
     "manageCaregivers": "Manage caregivers",
     "confirmDelete": "Delete this payment? Its history will be preserved.",
+    "refresh": "Refresh data",
     "methods": { "cash": "Cash", "bankTransfer": "Bank transfer" },
     "categories": { "monthlySalary": "Monthly salary", "holiday": "Holiday", "vacation": "Vacation", "sickLeave": "Sick leave", "bonus": "Bonus", "advance": "Advance", "reimbursement": "Reimbursement", "other": "Other" },
     "audit": { "created": "Payment created", "updated": "Payment updated", "deleted": "Payment deleted", "restored": "Payment restored", "statusChanged": "Status changed" },

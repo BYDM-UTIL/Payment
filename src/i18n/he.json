@@ -58,6 +58,7 @@
     "noActiveCaregiver": "אין כרגע מטפלת פעילה משויכת",
     "manageCaregivers": "ניהול מטפלות",
     "confirmDelete": "למחוק את התשלום? ההיסטוריה תישמר.",
+    "refresh": "רענון נתונים",
     "methods": { "cash": "מזומן", "bankTransfer": "העברה בנקאית" },
     "categories": { "monthlySalary": "שכר חודשי", "holiday": "דמי חג", "vacation": "חופשה", "sickLeave": "מחלה", "bonus": "בונוס", "advance": "מקדמה", "reimbursement": "החזר", "other": "אחר" },
     "audit": { "created": "תשלום נוצר", "updated": "תשלום עודכן", "deleted": "תשלום נמחק", "restored": "תשלום שוחזר", "statusChanged": "סטטוס השתנה" },

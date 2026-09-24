@@ -91,6 +91,10 @@ export async function deleteEmployee(id: string) {
 
 type PaymentRecordInput = Omit<PaymentRecord, 'id' | 'createdAt' | 'updatedAt' | 'deleted' | 'deletedAt' | 'deletedBy'>
 
+function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T
+}
+
 function paymentCollection(employeeId: string) {
   return collection(db, 'employees', employeeId, 'payments')
 }
@@ -134,12 +138,12 @@ export async function getPaymentRecords(employeeId: string, year: number, month?
 
 export async function createPaymentRecord(input: PaymentRecordInput, performedByName: string): Promise<string> {
   const ref = await addDoc(paymentCollection(input.caregiverId), {
-    ...input,
+    ...withoutUndefined(input),
     deleted: false,
     createdAt: isoNow(),
     updatedAt: isoNow(),
   })
-  await addPaymentAudit(input.caregiverId, ref.id, 'created', input.createdBy, performedByName, undefined, input as unknown as Record<string, unknown>)
+  await addPaymentAudit(input.caregiverId, ref.id, 'created', input.createdBy, performedByName, undefined, withoutUndefined(input) as Record<string, unknown>)
   return ref.id
 }
 
@@ -154,7 +158,7 @@ export async function updatePaymentRecord(
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('payment-not-found')
   const before = snap.data() as Record<string, unknown>
-  const after = { ...before, ...data, updatedAt: isoNow(), updatedBy: performedBy }
+  const after = withoutUndefined({ ...before, ...data, updatedAt: isoNow(), updatedBy: performedBy })
   await updateDoc(ref, after)
   await addPaymentAudit(employeeId, paymentId, 'updated', performedBy, performedByName, before, after)
 }
